@@ -1,6 +1,7 @@
 import uuid
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,18 +10,30 @@ from app.config.boto import get_boto_client
 from app.config.config_app import settings
 from app.models.model_comments import Comments
 from app.models.model_users import RoleUser, Users
+from app.models.model_works import Answers, Works
 from app.schemas.schema_comment import CommentCreate, CommentUpdate
 from app.utils.logger import logger
 from app.services.service_base import ServiceBase
 
 class ServiceComments(ServiceBase):
 
-    async def create(self, data: CommentCreate, user: Users):
+    async def create(self, work_id: uuid.UUID, data: CommentCreate, user: Users):
         try:
             if user.role is RoleUser.student:
                 raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
 
-            comment = Comments(**data.model_dump())
+            stmt = (
+                select(Answers)
+                .where(Answers.id == data.answer_id)
+                .where(Answers.work_id == work_id)
+            )
+
+            response = await self.session.execute(stmt)
+            answer_db = response.scalars().first()
+            if answer_db is None:
+                raise ErrorNotExists(Answers)
+
+            comment = Comments(**data.model_dump(exclude_none=True))
             self.session.add(comment)
             await self.session.commit()
             return JSONResponse(

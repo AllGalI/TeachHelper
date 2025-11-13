@@ -18,12 +18,21 @@ router = APIRouter(prefix="/worsk/{work_id}/answers/{answer_id}/comments", tags=
 async def create_comment(
     work_id: uuid.UUID,
     answer_id: uuid.UUID,
-    data: CommentCreate,
+    type_id: uuid.UUID,
+    description: str|None = None,
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user)
 ):
     service = ServiceComments(session)
-    return await service.create(data, user)
+    return await service.create(
+        work_id,
+        CommentCreate(
+            answer_id=answer_id,
+            type_id=type_id,
+            description=description
+        ),
+        user
+    )
 
 @router.put("/{comment_id}")
 async def update_comment(
