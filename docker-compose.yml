@@ -29,6 +29,23 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  rabbitmq:
+    image: rabbitmq:4.2.0-management-alpine
+    container_name: rabbitmq
+    restart: always
+    env_file:
+      - .env
+    environment:
+      RABBITMQ_DEFAULT_USER: ${PIKA_USER}
+      RABBITMQ_DEFAULT_PASS: ${PIKA_PASSWORD}
+    ports:
+      - "${PIKA_PORT}:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq/mnesia
+
+
 volumes:
   pgdata:
+  rabbitmq_data:
 
