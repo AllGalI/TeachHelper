@@ -8,6 +8,7 @@ from app.models.model_works import StatusWork
 from app.models.model_users import Users
 from app.schemas.schema_comment import *
 from app.schemas.schema_work import WorkAllFilters
+from app.services.pika_service.htr_client import ClientHTRRpc, WorkRequestDTO
 from app.services.service_comments import ServiceComments
 from app.services.service_files import ServiceFiles
 from app.services.service_work import ServiceWork, WorkEasyRead, WorkUpdate
@@ -69,3 +70,16 @@ async def update(
 ):
     service = ServiceWork(session)
     return await service.update(id, status, conclusion, user)
+
+
+# router = APIRouter(prefix="/works/{work_id}", tags=["Works"])
+
+# @router.post("/ai_verification")
+@router.post("/{work_id}/ai_verification")
+async def verificate_work(
+    work_id: uuid.UUID,
+    session: AsyncSession = Depends(get_async_session),
+    user: Users = Depends(get_current_user)
+):
+    service = ServiceWork(session)
+    return await service.verificate_work(work_id, user)

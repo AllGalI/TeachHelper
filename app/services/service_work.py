@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 import uuid
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, subqueryload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions.responses import ErrorNotExists, ErrorPermissionDenied, ErrorRolePermissionDenied, Success
@@ -15,6 +15,7 @@ from app.repositories.repo_task import RepoTasks
 from app.schemas.schema_files import FileSchema
 from app.schemas.schema_tasks import SchemaTask
 from app.schemas.schema_work import WorkAllFilters, WorkEasyRead, WorkRead, WorkUpdate
+from app.services.pika_service.htr_client import ClientHTRRpc, WorkRequestDTO
 from app.utils.logger import logger
 from pydantic import BaseModel
 
@@ -270,6 +271,48 @@ class ServiceWork(ServiceBase):
             await self.session.commit()
             return Success()
 
+        except HTTPException:
+            await self.session.rollback()
+            raise
+
+        except Exception as exc:
+            logger.exception(exc)
+            await self.session.rollback()
+            raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    async def verificate_work(
+        self,
+        work_id: uuid.UUID,
+        user: Users
+    ):
+        try:
+            if user.role is RoleUser.student:
+                raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
+
+            stmt = (
+                select(Works)
+                .join(Tasks, Works.task_id == Tasks.id)
+                .where(
+                    Works.id == work_id,
+                    Tasks.teacher_id == user.id
+                )
+                .options(
+                    selectinload(Works.answers).load_only(Answers.id),
+                    selectinload(Works.answers)
+                        .selectinload(Answers.files).load_only(Files.id, Files.filename)
+                )
+            )
+            
+            result = await self.session.execute(stmt)
+            work_db = result.scalars().first()
+            if work_db is None:
+                raise ErrorNotExists(Works)
+
+
+            htrClient = ClientHTRRpc()
+            htrClient.call(WorkRequestDTO.model_validate(work_db))
+            return Success()
+        
         except HTTPException:
             await self.session.rollback()
             raise

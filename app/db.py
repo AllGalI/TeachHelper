@@ -14,7 +14,6 @@ engine_async = create_async_engine(settings.async_url, future=True)
 AsyncSessionLocal = async_sessionmaker(bind=engine_async, expire_on_commit=False, class_=AsyncSession)
 SyncSessionLocal = sessionmaker(bind=engine)
 
-@asynccontextmanager
 async def get_async_session():
     async with AsyncSessionLocal() as session:
         yield session
