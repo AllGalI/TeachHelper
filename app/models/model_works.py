@@ -63,6 +63,7 @@ class Works(Base):
     finish_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     status: Mapped[StatusWork] = mapped_column(Enum(StatusWork), default=StatusWork.draft, nullable=False)
     сonclusion: Mapped[str] = mapped_column(String, nullable=True)
+    ai_verificated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     answers: Mapped[list["Answers"]] = relationship(
         "Answers",

@@ -1,5 +1,5 @@
 from app.config.config_app import settings
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from sqlalchemy.orm import sessionmaker
 
 

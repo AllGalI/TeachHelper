@@ -27,7 +27,7 @@ def create_app() -> FastAPI:
     # Настройка CORS из переменных окружения
     cors_origins = settings.CORS_ORIGINS.split(",") if settings.CORS_ORIGINS != "*" else ["*"]
     cors_origins = [origin.strip() for origin in cors_origins]
-    
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins,

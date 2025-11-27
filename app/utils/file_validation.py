@@ -19,7 +19,8 @@ ALLOWED_MIME_TYPES = [
 ]
 
 # Разрешенные расширения файлов
-ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.txt']
+ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png']
+# ALLOWED_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.txt']
 
 # Максимальный размер файла (10 MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024

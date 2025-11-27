@@ -5,6 +5,7 @@ import uuid
 from pydantic import BaseModel
 
 from app.models.model_works import StatusWork
+from app.schemas.schema_comment import CommentRead
 from app.schemas.schema_files import FileSchema
 
 
@@ -41,6 +42,7 @@ class AnswerBase(BaseModel):
 class AnswerRead(AnswerBase):
     id:          uuid.UUID
     assessments:  list[AssessmentRead]
+    comments: list[CommentRead]
 
     model_config = {
         "from_attributes": True,
