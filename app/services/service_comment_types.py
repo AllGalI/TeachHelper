@@ -7,13 +7,13 @@ from app.exceptions.responses import ErrorNotExists, ErrorRolePermissionDenied, 
 from app.models.model_comments import CommentTypes
 from app.models.model_subjects import Subjects
 from app.models.model_users import RoleUser, Users
+from app.services.schema_base import BaseModelConfig
 from app.services.service_base import ServiceBase
 
-from pydantic import BaseModel
 
 from app.utils.logger import logger
 
-class SchemaCommentTypesBase(BaseModel):
+class SchemaCommentTypesBase(BaseModelConfig):
     short_name: str
     name: str
 
@@ -53,7 +53,7 @@ class ServiceCommentTypes(ServiceBase):
 
             if not subject:
                 raise ErrorNotExists(Subjects)
-
+            print(subject.comment_types)
             return [
                 SchemaCommentTypesRead.model_validate(c_type).model_dump(mode="json")
                 for c_type in subject.comment_types

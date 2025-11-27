@@ -1,17 +1,14 @@
 from typing import Optional
 import uuid
-from fastapi import APIRouter, Depends, Query, UploadFile
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_async_session
 from app.models.model_works import StatusWork
 from app.models.model_users import Users
 from app.schemas.schema_comment import *
-from app.schemas.schema_work import WorkAllFilters
-from app.services.pika_service.htr_client import ClientHTRRpc, WorkRequestDTO
 from app.services.service_comments import ServiceComments
-from app.services.service_files import ServiceFiles
-from app.services.service_work import ServiceWork, WorkEasyRead, WorkUpdate
+from app.services.service_work import ServiceWork, WorkEasyRead
 from app.utils.oAuth import get_current_user
 
 
@@ -76,10 +73,25 @@ async def update(
 
 # @router.post("/ai_verification")
 @router.post("/{work_id}/ai_verification")
-async def verificate_work(
+async def send_work_to_verification(
     work_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user)
 ):
     service = ServiceWork(session)
-    return await service.verificate_work(work_id, user)
+    return await service.send_work_to_verification(work_id, user)
+
+
+@router.post("/{work_id}/ai")
+async def create_ai_comments(
+    work_id: uuid.UUID,
+    comments: list[AICommentDTO],
+    session: AsyncSession = Depends(get_async_session),
+    user: Users = Depends(get_current_user)
+):
+    service = ServiceComments(session)
+    return await service.ai_create(
+        work_id,
+        comments,
+        user
+    )

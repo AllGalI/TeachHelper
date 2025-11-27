@@ -1,8 +1,9 @@
 from fastapi import HTTPException, status
 import uuid
 from fastapi.responses import JSONResponse
+import pika
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload, subqueryload
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions.responses import ErrorNotExists, ErrorPermissionDenied, ErrorRolePermissionDenied, Success
@@ -10,14 +11,12 @@ from app.models.model_comments import Comments
 from app.models.model_files import Files
 from app.models.model_tasks import Exercises, Tasks
 from app.models.model_users import  RoleUser, Users, teachers_students
-from app.models.model_works import Assessments, Answers, StatusWork, Works
+from app.models.model_works import Answers, StatusWork, Works
 from app.repositories.repo_task import RepoTasks
-from app.schemas.schema_files import FileSchema
 from app.schemas.schema_tasks import SchemaTask
-from app.schemas.schema_work import WorkAllFilters, WorkEasyRead, WorkRead, WorkUpdate
-from app.services.pika_service.htr_client import ClientHTRRpc, WorkRequestDTO
+from app.schemas.schema_work import  WorkEasyRead, WorkRead
+from app.config.rabbit import WorkRequestDTO, channel
 from app.utils.logger import logger
-from pydantic import BaseModel
 
 from app.repositories.repo_work import RepoWorks
 from app.services.service_base import ServiceBase
@@ -280,7 +279,7 @@ class ServiceWork(ServiceBase):
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    async def verificate_work(
+    async def send_work_to_verification(
         self,
         work_id: uuid.UUID,
         user: Users
@@ -303,14 +302,28 @@ class ServiceWork(ServiceBase):
                 )
             )
             
+
             result = await self.session.execute(stmt)
             work_db = result.scalars().first()
+            
             if work_db is None:
                 raise ErrorNotExists(Works)
 
+            if work_db.ai_verificated:
+                raise HTTPException(status.HTTP_409_CONFLICT, "This work already verificated by AI")
 
-            htrClient = ClientHTRRpc()
-            htrClient.call(WorkRequestDTO.model_validate(work_db))
+            if work_db.status is not StatusWork.verification:
+                raise HTTPException(403, "Work must have verification status")
+
+            channel.basic_publish(
+                exchange='',
+                routing_key='htr_queue',
+                properties=pika.BasicProperties(
+                    content_type="application/json",
+                ),
+                body=WorkRequestDTO.model_validate(work_db).model_dump_json().encode()
+            )
+
             return Success()
         
         except HTTPException:

@@ -50,7 +50,6 @@ class ServiceAuth(ServiceBase):
 
     async def login(self, form_data: OAuth2PasswordRequestForm):
         try:
-        
             repo = RepoUser(self.session)
             if not await repo.email_exists(form_data.username):
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "User with this email not exists")
