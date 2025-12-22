@@ -44,8 +44,23 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq/mnesia
 
+  redis:
+    image: redis:8.4.0-alpine
+    container_name: redis_c
+    restart: always
+    env_file:
+      - .env
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASS}
+      REDIS_USER: ${REDIS_USER}
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data:/var/lib/redis/data
+
 
 volumes:
   pgdata:
   rabbitmq_data:
+  redis_data:
 

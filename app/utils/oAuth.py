@@ -20,16 +20,8 @@ def create_access_token(data: dict, key: str, expires_delta: timedelta | None = 
     return jwt.encode(to_encode, key, algorithm=settings.ALGORITHM)
 
 def decode_token(token: str, key: str, algorithms=[settings.ALGORITHM]):
-    if not token.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token format (expected 'Bearer <token>')"
-        )
-
-    jwt_token = token.split("Bearer ")[1]
-
     try:
-        payload = jwt.decode(token=jwt_token, key=key, algorithms=algorithms)
+        payload = jwt.decode(token, key, algorithms)
         return payload
 
     except ExpiredSignatureError:
