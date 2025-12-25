@@ -14,19 +14,34 @@ from app.models.model_users import  RoleUser, Users, teachers_students
 from app.models.model_works import Answers, StatusWork, Works
 from app.repositories.repo_task import RepoTasks
 from app.schemas.schema_tasks import SchemaTask
-from app.schemas.schema_work import  WorkEasyRead, WorkRead
+from app.schemas.schema_work import  SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkEasyRead, WorkRead
 from app.config.rabbit import WorkRequestDTO, channel
 from app.utils.logger import logger
+from app.transformers.transformer_work import TransformerWorks
 
 from app.repositories.repo_work import RepoWorks
 from app.services.service_base import ServiceBase
 
-
-
-
-
 class ServiceWork(ServiceBase):
 
+    async def get_smart_filters_teacher(self, user: Users, filters: SmartFiltersWorkTeacher):
+        repo = RepoWorks(self.session)
+        if user.role is RoleUser.student:
+            raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
+
+        rows = await repo.get_smart_filters_teacher(user.id, filters)
+        return TransformerWorks.handle_filters_response(user, rows)
+
+
+    async def get_smart_filters_student(self, user: Users, filters: SmartFiltersWorkStudent):
+        repo = RepoWorks(self.session)
+        if user.role is RoleUser.teacher:
+            raise ErrorRolePermissionDenied(RoleUser.student, user.role)
+
+        rows = await repo.get_smart_filters_student(user.id, filters)
+        return TransformerWorks.handle_filters_response(user, rows)
+
+    # async def get_works(self, user: Users, filters: SmartFiltersWorkTeacher)
 
     async def create_works(
         self,
@@ -124,21 +139,22 @@ class ServiceWork(ServiceBase):
         self,
         user: Users,
         classrooms_ids: list[uuid.UUID]|None = None,
-        students_ids: list[uuid.UUID]|None = None,
-        subject_id: uuid.UUID | None = None,
-        status_work: StatusWork | None = None
+        subject: uuid.UUID|None = None,
+        student: uuid.UUID | None = None,
+        statuses: list[StatusWork] | None = None
     ) -> list[WorkEasyRead]:
         try:
             if user.role is RoleUser.student and user.role is not RoleUser.admin:
                 raise ErrorRolePermissionDenied(RoleUser.teacher, RoleUser.student)
+              
 
-            students_ids = await get_students_from_classrooms(self.session, user, students_ids, classrooms_ids)
+            # students_ids = await get_students_from_classrooms(self.session, user, students_ids, classrooms_ids)
             repo = RepoWorks(self.session)
             rows = await repo.get_all_teacher(
                 user,
-                students_ids,
-                subject_id,
-                status_work,
+                student,
+                subject,
+                statuses,
             )
 
             return rows_to_easy_read(rows)
@@ -175,13 +191,6 @@ class ServiceWork(ServiceBase):
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
-
-# draft        = "draft" -- изначально
-# inProgress   = "inProgress" -- после того как студент открыл
-# verification = "verification" -- после того как студент отправил
-# verificated  = "verificated" -- после того как учитель проверил
-# canceled     = "canceled" -- после того как учитель отменил задание
 
     async def update(
         self,
@@ -336,6 +345,8 @@ class ServiceWork(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+
+
 def rows_to_easy_read(rows):
     work_list = []
     for row in rows:
@@ -349,41 +360,44 @@ def rows_to_easy_read(rows):
             WorkEasyRead(
                 id=row.id,
                 student_name=row.student_name,
+                subject=row.subject,
                 task_name=row.task_name,
                 score=score,
                 max_score=row.max_score,
                 percent=percent,
-                status_work=row.status_work
+                status_work=row.status
             )
         )
     return work_list
 
 
+
 async def get_students_from_classrooms(
     session: AsyncSession,
     teacher: Users,
-    students_ids: list[uuid.UUID]|None = None,
-    classrooms_ids: list[uuid.UUID]|None = None,
+    student: uuid.UUID|None = None,
+    classroom: uuid.UUID|None = None,
 ) -> list[uuid.UUID]:
 
+    if student: 
+      return student
 
-    if classrooms_ids is not None:
-        if students_ids is None:
-            students_ids = []
+    if classroom is not None:
+        if student is None:
+            student = []
 
         stmt = (
             select(Users.id)
             .select_from(teachers_students)
             .join(Users, teachers_students.c.student_id == Users.id)
             .where(teachers_students.c.teacher_id == teacher.id)
-            .where(teachers_students.c.classroom_id.in_(classrooms_ids))
+            .where(teachers_students.c.classroom_id == classroom)
         )
+        
+        if student is not None:
+          stmt = stmt.where(teachers_students.c.student_id == student)
 
         response = await session.execute(stmt)
         ids_from_classroom = response.scalars().all()
 
-        for id in ids_from_classroom:
-            if id not in students_ids:
-                students_ids.append(id)
-
-    return students_ids
+    return ids_from_classroom

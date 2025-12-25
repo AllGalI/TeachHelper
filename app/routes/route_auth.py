@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordRequestForm
@@ -55,3 +55,14 @@ async def me(current_user: Users = Depends(get_current_user)):
 async def delete(id: uuid.UUID, email: EmailStr, session: AsyncSession = Depends(get_async_session), current_user: Users = Depends(get_current_user)):
     service = ServiceAuth(session)
     return await service.delete(email, id)
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie(
+        "session", 
+        httponly=True, 
+        samesite="lax", 
+        secure=True # должно совпадать с тем, как создавали
+    )
+    return {"detail": "Logged out"}

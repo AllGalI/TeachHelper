@@ -70,7 +70,18 @@ class ServiceAuth(ServiceBase):
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Please confirm your email first")
 
             token = create_access_token({"email": form_data.username}, settings.SECRET)
-            return JSONResponse(content={"token": f"Bearer {token}"})
+            
+            response = JSONResponse(content={"message": "ok"})
+            response.set_cookie(
+              "session",
+              token,
+              secure=True,
+              httponly=True,
+              samesite="lax",
+              max_age=3600
+
+            )
+            return response
 
 
         except HTTPException as exc:

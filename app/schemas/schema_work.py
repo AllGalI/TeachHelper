@@ -2,11 +2,13 @@
 
 from datetime import datetime
 import uuid
-from pydantic import BaseModel
+from fastapi import Query
+from pydantic import BaseModel, Field
 
 from app.models.model_works import StatusWork
 from app.schemas.schema_comment import CommentRead
 from app.schemas.schema_files import FileSchema
+from app.services.schema_base import BaseModelConfig
 
 
 class WorkAllFilters(BaseModel):
@@ -73,6 +75,7 @@ class WorkUpdate(WorkRead):
 class WorkEasyRead(BaseModel):
     id: uuid.UUID
     task_name: str
+    subject: str
     student_name: str
     score: int
     max_score: int
@@ -82,3 +85,30 @@ class WorkEasyRead(BaseModel):
     model_config = {
         "from_attributes": True,
     }
+
+
+
+from typing import List, Optional
+from datetime import datetime
+
+class SmartFiltersWorkTeacher(BaseModelConfig):
+    students_ids: Optional[List[uuid.UUID]] = Field(Query(None))
+    classrooms_ids: Optional[List[uuid.UUID]] = Field(Query(None))
+    statuses: Optional[List[str]] = Field(Query(None))
+    tasks_ids: Optional[List[uuid.UUID]] = Field(Query(None))
+    subject_id: Optional[uuid.UUID] = None
+
+    min: Optional[datetime] = None
+    max: Optional[datetime] = None
+
+
+class SmartFiltersWorkStudent(BaseModelConfig):
+    teachers_ids: Optional[List[uuid.UUID]] = Field(Query(None))
+    classrooms_ids: Optional[List[uuid.UUID]] = Field(Query(None))
+    statuses: Optional[List[str]] = Field(Query(None))
+    tasks_ids: Optional[List[uuid.UUID]] = Field(Query(None))
+    subject_id: Optional[uuid.UUID] = None
+
+    min: Optional[datetime] = None
+    max: Optional[datetime] = None
+

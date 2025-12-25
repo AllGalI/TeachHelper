@@ -21,8 +21,6 @@ class Settings(BaseSettings):
 
     FRONT_URL: str
     
-    # CORS
-    CORS_ORIGINS: str = "*"  # Для продакшена укажите конкретные домены через запятую
     
     # MinIO
     MINIO_BUCKET: str = "teachhelper"  # Единый bucket для всех файлов

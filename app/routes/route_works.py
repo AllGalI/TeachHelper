@@ -1,12 +1,14 @@
-from typing import Optional
+from typing import Annotated, List, Optional
 import uuid
 from fastapi import APIRouter, Depends, Query
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_async_session
 from app.models.model_works import StatusWork
 from app.models.model_users import Users
 from app.schemas.schema_comment import *
+from app.schemas.schema_work import SmartFiltersWorkStudent, SmartFiltersWorkTeacher
 from app.services.service_comments import ServiceComments
 from app.services.service_work import ServiceWork, WorkEasyRead
 from app.utils.oAuth import get_current_user
@@ -15,24 +17,54 @@ from app.utils.oAuth import get_current_user
 router = APIRouter(prefix="/works", tags=["Works"])
 
 
+@router.get("/teacher/filters")
+async def get_filters_teacher(
+    filters: Annotated[SmartFiltersWorkTeacher, Depends()],
+    session: AsyncSession = Depends(get_async_session),
+    user: Users = Depends(get_current_user),
+):
+    service = ServiceWork(session)
+    return await service.get_smart_filters_teacher(user, filters)
+
+@router.get("/student/filters")
+async def get_filters_student(
+    filters: Annotated[SmartFiltersWorkStudent, Depends()],
+    session: AsyncSession = Depends(get_async_session),
+    user: Users = Depends(get_current_user),
+):
+    service = ServiceWork(session)
+    return await service.get_smart_filters_student(user, filters)
+
+
+
+
 @router.get("/teacher", response_model=list[WorkEasyRead])
 async def get_all_teacher(
-    subject_id: Optional[uuid.UUID] = None,
-    students_ids: Optional[list[uuid.UUID]] = Query(None),
+    subject: Optional[uuid.UUID] = None,
+    student: Optional[uuid.UUID] = None,
     classrooms_ids: Optional[list[uuid.UUID]] = Query(None),
-    status_work: Optional[StatusWork] = None,
+    statuses: Optional[list[StatusWork]] = Query(None),
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user),
 ):
 
+    print(subject)
+    print(student)
+    print(classrooms_ids)
+    print(statuses)
+
+
+
     service = ServiceWork(session)
-    return await service.get_all_teacher(
+    response = await service.get_all_teacher(
         user=user,
-        subject_id=subject_id,
-        students_ids=students_ids,
+        subject=subject,
+        student=student,
         classrooms_ids=classrooms_ids,
-        status_work=status_work,
+        statuses=statuses,
     )
+    print(response)
+    return response
     
 @router.get("/student", response_model=list[WorkEasyRead])
 async def get_all_student(

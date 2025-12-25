@@ -29,6 +29,7 @@ class ServiceCommentTypes(ServiceBase):
                 raise ErrorRolePermissionDenied(RoleUser.admin, user.role)
             
             comment_type = CommentTypes(**data.model_dump())
+            comment_type.subject_id = id
             self.session.add(comment_type)
             await self.session.commit()
 

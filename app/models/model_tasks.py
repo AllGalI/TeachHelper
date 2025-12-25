@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import UUID, DateTime, ForeignKey, Integer, String
+from sqlalchemy import UUID, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from app.models.base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -43,6 +43,10 @@ class Tasks(Base):
     name: Mapped[str] = mapped_column(String(), nullable=False)
     description: Mapped[str] = mapped_column(String())
     deadline: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('name', 'subject_id', 'teacher_id', name='_name_subject_teacher_uc'),
+    )
 
     teacher: Mapped["Users"] = relationship(
         "Users",
