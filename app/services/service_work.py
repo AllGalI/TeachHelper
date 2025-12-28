@@ -41,6 +41,48 @@ class ServiceWork(ServiceBase):
         rows = await repo.get_smart_filters_student(user.id, filters)
         return TransformerWorks.handle_filters_response(user, rows)
 
+    async def get_works_list_teacher(
+        self,
+        user: Users,
+        filters: SmartFiltersWorkTeacher
+    ) -> list[WorkEasyRead]:
+        """Получение списка работ для учителя с применением умных фильтров"""
+        try:
+            if user.role is RoleUser.student and user.role is not RoleUser.admin:
+                raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
+
+            repo = RepoWorks(self.session)
+            rows = await repo.get_works_list_teacher(user.id, filters)
+            return rows_to_easy_read(rows)
+
+        except HTTPException as exc:
+            raise
+        except Exception as exc:
+            logger.exception(exc)
+            await self.session.rollback()
+            raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    async def get_works_list_student(
+        self,
+        user: Users,
+        filters: SmartFiltersWorkStudent
+    ) -> list[WorkEasyRead]:
+        """Получение списка работ для ученика с применением умных фильтров"""
+        try:
+            if user.role is RoleUser.teacher and user.role is not RoleUser.admin:
+                raise ErrorRolePermissionDenied(RoleUser.student, user.role)
+
+            repo = RepoWorks(self.session)
+            rows = await repo.get_works_list_student(user.id, filters)
+            return rows_to_easy_read(rows)
+
+        except HTTPException as exc:
+            raise
+        except Exception as exc:
+            logger.exception(exc)
+            await self.session.rollback()
+            raise HTTPException(status_code=500, detail="Internal Server Error")
+
     # async def get_works(self, user: Users, filters: SmartFiltersWorkTeacher)
 
     async def create_works(
@@ -129,63 +171,6 @@ class ServiceWork(ServiceBase):
         except HTTPException as exc:
             raise
 
-        except Exception as exc:
-            logger.exception(exc)
-            await self.session.rollback()
-            raise HTTPException(status_code=500, detail="Internal Server Error")
-
-
-    async def get_all_teacher(
-        self,
-        user: Users,
-        classrooms_ids: list[uuid.UUID]|None = None,
-        subject: uuid.UUID|None = None,
-        student: uuid.UUID | None = None,
-        statuses: list[StatusWork] | None = None
-    ) -> list[WorkEasyRead]:
-        try:
-            if user.role is RoleUser.student and user.role is not RoleUser.admin:
-                raise ErrorRolePermissionDenied(RoleUser.teacher, RoleUser.student)
-              
-
-            # students_ids = await get_students_from_classrooms(self.session, user, students_ids, classrooms_ids)
-            repo = RepoWorks(self.session)
-            rows = await repo.get_all_teacher(
-                user,
-                student,
-                subject,
-                statuses,
-            )
-
-            return rows_to_easy_read(rows)
-            
-        except HTTPException as exc:
-            raise
-        
-        except Exception as exc:
-            logger.exception(exc)
-            await self.session.rollback()
-            raise HTTPException(status_code=500, detail="Internal Server Error")
-
-
-    async def get_all_student(
-        self,
-        user: Users,
-        subject_id: uuid.UUID | None = None,
-        status_work: StatusWork | None = None
-    ) -> list[WorkEasyRead]:
-        try:
-            if user.role is RoleUser.teacher and user.role is not RoleUser.admin:
-                raise ErrorRolePermissionDenied(RoleUser.student, RoleUser.teacher)
-
-            repo = RepoWorks(self.session)
-            rows = await repo.get_all_student(user, subject_id, status_work)
-
-            return rows_to_easy_read(rows)
-            
-        except HTTPException as exc:
-            raise
-        
         except Exception as exc:
             logger.exception(exc)
             await self.session.rollback()
@@ -355,7 +340,7 @@ def rows_to_easy_read(rows):
         max_score = row.max_score if row.max_score is not None and row.max_score > 0 else 1 # Избегаем деления на ноль
 
         percent = round((score / max_score) * 100)
-        
+
         work_list.append(
             WorkEasyRead(
                 id=row.id,

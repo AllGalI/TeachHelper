@@ -35,50 +35,25 @@ async def get_filters_student(
     service = ServiceWork(session)
     return await service.get_smart_filters_student(user, filters)
 
-
-
-
-@router.get("/teacher", response_model=list[WorkEasyRead])
-async def get_all_teacher(
-    subject: Optional[uuid.UUID] = None,
-    student: Optional[uuid.UUID] = None,
-    classrooms_ids: Optional[list[uuid.UUID]] = Query(None),
-    statuses: Optional[list[StatusWork]] = Query(None),
+@router.get("/teacher/list", response_model=list[WorkEasyRead])
+async def get_works_list_teacher(
+    filters: Annotated[SmartFiltersWorkTeacher, Depends()],
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user),
 ):
-
-    print(subject)
-    print(student)
-    print(classrooms_ids)
-    print(statuses)
-
-
-
+    """Получение списка работ для учителя с применением умных фильтров"""
     service = ServiceWork(session)
-    response = await service.get_all_teacher(
-        user=user,
-        subject=subject,
-        student=student,
-        classrooms_ids=classrooms_ids,
-        statuses=statuses,
-    )
-    print(response)
-    return response
-    
-@router.get("/student", response_model=list[WorkEasyRead])
-async def get_all_student(
-    subject_id: uuid.UUID|None = None,
-    status_work: StatusWork|None = None,
+    return await service.get_works_list_teacher(user, filters)
+
+@router.get("/student/list", response_model=list[WorkEasyRead])
+async def get_works_list_student(
+    filters: Annotated[SmartFiltersWorkStudent, Depends()],
     session: AsyncSession = Depends(get_async_session),
-    user: Users = Depends(get_current_user)
+    user: Users = Depends(get_current_user),
 ):
+    """Получение списка работ для ученика с применением умных фильтров"""
     service = ServiceWork(session)
-    return await service.get_all_student(
-        user,
-        subject_id,
-        status_work,
-    )
+    return await service.get_works_list_student(user, filters)
 
 @router.get("/{id}")
 async def get(

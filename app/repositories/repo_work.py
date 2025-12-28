@@ -311,4 +311,152 @@ class RepoWorks():
             logger.exception(exc)
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    async def get_works_list_teacher(self, teacher_id: uuid.UUID, filters: SmartFiltersWorkTeacher):
+        """Получение списка работ для учителя с применением умных фильтров"""
+        try:
+            # Базовый запрос для получения работ с подсчетом баллов
+            stmt = (
+                select(
+                    Works.id.label("id"),
+                    func.concat(Users.first_name, " ", Users.last_name).label("student_name"),
+                    Tasks.name.label("task_name"),
+                    Subjects.name.label('subject'),
+                    func.sum(Assessments.points).label("score"),
+                    func.sum(Criterions.score).label("max_score"),
+                    Works.status.label("status")
+                )
+                .select_from(Works)
+                .join(Users, Works.student_id == Users.id)
+                .join(Tasks, Works.task_id == Tasks.id)
+                .join(Subjects, Tasks.subject_id == Subjects.id)
+                .join(teachers_students, 
+                      (teachers_students.c.student_id == Works.student_id) & 
+                      (teachers_students.c.teacher_id == teacher_id))
+                .outerjoin(Answers, Works.id == Answers.work_id)
+                .outerjoin(Exercises, Answers.exercise_id == Exercises.id)
+                .outerjoin(Criterions, Exercises.id == Criterions.exercise_id)
+                .outerjoin(Assessments, 
+                          (Answers.id == Assessments.answer_id) & 
+                          (Criterions.id == Assessments.criterion_id))
+                .where(Tasks.teacher_id == teacher_id)
+            )
+
+            # Применение фильтров
+            if filters.students_ids:
+                stmt = stmt.where(Users.id.in_(filters.students_ids))
+
+            if filters.classrooms_ids:
+                # Используем join для фильтрации по классам
+                stmt = stmt.join(Classrooms, teachers_students.c.classroom_id == Classrooms.id)
+                stmt = stmt.where(Classrooms.id.in_(filters.classrooms_ids))
+
+            if filters.statuses:
+                # Преобразуем строки в StatusWork enum
+                status_enum_list = [StatusWork(s) for s in filters.statuses]
+                stmt = stmt.where(Works.status.in_(status_enum_list))
+
+            if filters.tasks_ids:
+                stmt = stmt.where(Tasks.id.in_(filters.tasks_ids))
+
+            if filters.subject_id:
+                stmt = stmt.where(Subjects.id == filters.subject_id)
+
+            if filters.min:
+                stmt = stmt.where(Works.created_at >= filters.min)
+
+            if filters.max:
+                stmt = stmt.where(Works.created_at <= filters.max)
+
+            # Группировка для агрегации баллов
+            stmt = stmt.group_by(
+                Works.id,
+                Users.first_name,
+                Users.last_name,
+                Subjects.name,
+                Tasks.name,
+                Works.status
+            )
+
+            result = await self.session.execute(stmt)
+            return result.all()
+
+        except Exception as exc:
+            logger.exception(exc)
+            await self.session.rollback()
+            raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    async def get_works_list_student(self, student_id: uuid.UUID, filters: SmartFiltersWorkStudent):
+        """Получение списка работ для ученика с применением умных фильтров"""
+        try:
+            # Базовый запрос для получения работ с подсчетом баллов
+            stmt = (
+                select(
+                    Works.id.label("id"),
+                    func.concat(Users.first_name, " ", Users.last_name).label("student_name"),
+                    Tasks.name.label("task_name"),
+                    Subjects.name.label('subject'),
+                    func.sum(Assessments.points).label("score"),
+                    func.sum(Criterions.score).label("max_score"),
+                    Works.status.label("status")
+                )
+                .select_from(Works)
+                .join(Users, Works.student_id == Users.id)
+                .join(Tasks, Works.task_id == Tasks.id)
+                .join(Subjects, Tasks.subject_id == Subjects.id)
+                .join(teachers_students, 
+                      (teachers_students.c.student_id == student_id) & 
+                      (teachers_students.c.teacher_id == Tasks.teacher_id))
+                .outerjoin(Answers, Works.id == Answers.work_id)
+                .outerjoin(Exercises, Answers.exercise_id == Exercises.id)
+                .outerjoin(Criterions, Exercises.id == Criterions.exercise_id)
+                .outerjoin(Assessments, 
+                          (Answers.id == Assessments.answer_id) & 
+                          (Criterions.id == Assessments.criterion_id))
+                .where(Works.student_id == student_id)
+            )
+
+            # Применение фильтров
+            if filters.teachers_ids:
+                stmt = stmt.where(Tasks.teacher_id.in_(filters.teachers_ids))
+
+            if filters.classrooms_ids:
+                # Используем join для фильтрации по классам
+                stmt = stmt.join(Classrooms, teachers_students.c.classroom_id == Classrooms.id)
+                stmt = stmt.where(Classrooms.id.in_(filters.classrooms_ids))
+
+            if filters.statuses:
+                # Преобразуем строки в StatusWork enum
+                status_enum_list = [StatusWork(s) for s in filters.statuses]
+                stmt = stmt.where(Works.status.in_(status_enum_list))
+
+            if filters.tasks_ids:
+                stmt = stmt.where(Tasks.id.in_(filters.tasks_ids))
+
+            if filters.subject_id:
+                stmt = stmt.where(Subjects.id == filters.subject_id)
+
+            if filters.min:
+                stmt = stmt.where(Works.created_at >= filters.min)
+
+            if filters.max:
+                stmt = stmt.where(Works.created_at <= filters.max)
+
+            # Группировка для агрегации баллов
+            stmt = stmt.group_by(
+                Works.id,
+                Users.first_name,
+                Users.last_name,
+                Subjects.name,
+                Tasks.name,
+                Works.status
+            )
+
+            result = await self.session.execute(stmt)
+            return result.all()
+
+        except Exception as exc:
+            logger.exception(exc)
+            await self.session.rollback()
+            raise HTTPException(status_code=500, detail="Internal Server Error")
       
