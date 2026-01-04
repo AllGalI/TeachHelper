@@ -6,13 +6,14 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.db import get_async_session
 from app.models.model_users import Users
 from app.schemas.schema_auth import ConfirmReset, EmailBodyDTO, CodeDTO, UserRegister, UserRead, UserToken, UserResetPassword
+from app.schemas.schema_students import UsersPageSchema
 from app.services.service_auth import ServiceAuth
 from app.utils.oAuth import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/register", response_model=UserRead)
+@router.post("/register", response_model=UsersPageSchema)
 async def register(user: UserRegister, session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
     return await service.register(user)

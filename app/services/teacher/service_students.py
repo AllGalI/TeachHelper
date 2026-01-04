@@ -9,14 +9,20 @@ from app.repositories.repo_user import RepoUser
 from app.repositories.teacher.repo_students import RepoStudents
 
 from app.exceptions.responses import ErrorRolePermissionDenied
+from app.schemas.schema_students import (
+    ClassroomRead, 
+    StudentRead, 
+    UsersPageSchema,
+    StudentsReadSchemaTeacher,
+    StudentFilterItem,
+    ClassroomFilterItem
+)
 from app.utils.logger import logger
 from app.services.service_base import ServiceBase
 
 
 
-
 class ServiceStudents(ServiceBase):
-
 
     async def get_all(self, user: Users):
         if user.role != RoleUser.teacher:
@@ -28,10 +34,10 @@ class ServiceStudents(ServiceBase):
         classrooms_repo = RepoClassroom(self.session)
         classrooms = await classrooms_repo.get_teacher_classrooms(user.id)
 
-        return {
-           "students": students,
-           "classrooms": classrooms
-        }
+        return UsersPageSchema(
+           students=[StudentRead.model_validate(student) for student in students],
+           classrooms=[ClassroomRead.model_validate(classroom) for classroom in classrooms]
+        )
 
 
     async def get_performans_data(self, student_id: uuid.UUID, user: Users):
@@ -146,8 +152,44 @@ class ServiceStudents(ServiceBase):
             {"status": "ok"},
             status.HTTP_201_CREATED
         )
-        
-        
-        
+
+    async def get_filters(self, user: Users) -> StudentsReadSchemaTeacher:
+        """
+        Получение доступных фильтров для учителя: список студентов и классов
+        """
+        if user.role != RoleUser.teacher:
+            raise ErrorRolePermissionDenied(RoleUser.teacher)
+
+        repo = RepoStudents(self.session)
+        rows = await repo.get_filters(user.id)
+
+        # Формируем ответ с уникальными значениями
+        students_set = set()
+        classrooms_set = set()
+
+        for row in rows:
+            # Добавляем студентов (id, name) в set для уникальности
+            if row["student_id"]:
+                students_set.add((row["student_id"], row["student_name"]))
             
+            # Добавляем классы (id, name) в set для уникальности
+            if row["classroom_id"]:
+                classrooms_set.add((row["classroom_id"], row["classroom_name"]))
+
+        # Преобразуем sets в списки объектов схемы
+        students_list = [
+            StudentFilterItem(id=item[0], name=item[1]) 
+            for item in students_set
+        ]
+        classrooms_list = [
+            ClassroomFilterItem(id=item[0], name=item[1]) 
+            for item in classrooms_set
+        ]
+
+        # Возвращаем схему с валидированными данными
+        return StudentsReadSchemaTeacher(
+            students=students_list,
+            classrooms=classrooms_list
+        )
+        
             

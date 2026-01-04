@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+- The project already has an established structure.
+- Do not move files or create new folders without explicit permission.
+- Do not modify database models without explicit instruction.

@@ -3,7 +3,7 @@ from sqlalchemy import func, insert, select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.model_tasks import Tasks
 from app.models.model_works import Works
-
+from app.models.model_classroom import Classrooms
 
 from app.models.model_users import RoleUser, Users, teachers_students
 
@@ -117,4 +117,26 @@ class RepoStudents:
             .values(teacher_id=teacher_id, student_id=student_id)
         )
         await self.session.execute(stmt)
+
+    async def get_filters(self, teacher_id: uuid.UUID):
+        """
+        Получение доступных фильтров для учителя: список студентов и классов
+        """
+        # Запрос для получения студентов и классов, связанных с учителем
+        stmt = (
+            select(
+                Users.id.label("student_id"),
+                func.concat(Users.first_name, " ", Users.last_name).label("student_name"),
+                Classrooms.id.label("classroom_id"),
+                Classrooms.name.label("classroom_name")
+            )
+            .select_from(teachers_students)
+            .join(Users, teachers_students.c.student_id == Users.id)
+            .outerjoin(Classrooms, teachers_students.c.classroom_id == Classrooms.id)
+            .where(teachers_students.c.teacher_id == teacher_id)
+            .where(Users.role == RoleUser.student)
+            .distinct()
+        )
+        result = await self.session.execute(stmt)
+        return result.mappings().all()
         
