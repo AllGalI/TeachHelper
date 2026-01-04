@@ -1,0 +1,9 @@
+---
+alwaysApply: true
+---
+
+When updating or creating API documentation in `api.md`:
+  - Clearly describe the expected response for each route.
+  - Document required request data for `body` and `params`. 
+  - Extract details for `body` and `params` strictly from Pydantic schemas if they are available; do not document these if schemas are missing.
+  - Explicitly specify the data types required for the request and the data types returned in the response.
