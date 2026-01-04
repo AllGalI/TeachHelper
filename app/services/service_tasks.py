@@ -8,7 +8,15 @@ from sqlalchemy.orm import  joinedload, selectinload, Load
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.repo_task import RepoTasks
-from app.schemas.schema_tasks import TaskCreate, SchemaTask, TasksFilters, TasksReadEasy
+from app.schemas.schema_tasks import (
+    TaskCreate, 
+    SchemaTask, 
+    TasksFilters, 
+    TasksReadEasy,
+    TasksFiltersReadSchema,
+    SubjectFilterItem,
+    TaskFilterItem
+)
 from app.models.model_tasks import  Criterions, Exercises, Tasks
 
 from app.models.model_users import RoleUser, Users
@@ -65,19 +73,9 @@ class ServiceTasks(ServiceBase):
             if teacher.role is RoleUser.student:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
 
-            query = (
-                select(
-                    Tasks.id,
-                    Tasks.name,
-                    Tasks.updated_at
-                )
-                .where(Tasks.teacher_id == teacher.id)
-            )
-            if filters.name is not None:
-               query = query.where(Tasks.name.ilike(f'%{filters.name}%'))
-            
-            response = await self.session.execute(query)
-            tasks =  response.mappings().all()
+            # Используем репозиторий для получения задач
+            repo = RepoTasks(self.session)
+            tasks = await repo.get_all(teacher.id, filters)
             return [TasksReadEasy.model_validate(task) for task in tasks]
     
         except HTTPException as exc:
@@ -173,4 +171,33 @@ class ServiceTasks(ServiceBase):
         except Exception as exc:
             logger.exception(exc)
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    async def get_filters(self, teacher: Users) -> TasksFiltersReadSchema:
+        """
+        Получение доступных фильтров для учителя: список предметов и задач
+        """
+        if teacher.role is RoleUser.student:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="User don't have permission to get filters"
+            )
+
+        repo = RepoTasks(self.session)
+        rows = await repo.get_filters(teacher.id)
+
+        # Преобразуем данные в объекты схемы
+        subjects_list = [
+            SubjectFilterItem(id=row["subject_id"], name=row["subject_name"])
+            for row in rows["subjects"]
+        ]
+        tasks_list = [
+            TaskFilterItem(id=row["task_id"], name=row["task_name"])
+            for row in rows["tasks"]
+        ]
+
+        # Возвращаем схему с валидированными данными
+        return TasksFiltersReadSchema(
+            subjects=subjects_list,
+            tasks=tasks_list
+        )
 

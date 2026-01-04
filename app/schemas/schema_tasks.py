@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 import uuid
 from datetime import datetime
+from app.services.schema_base import BaseModelConfig
 
 class ExerciseCriterionCreate(BaseModel):
     name:  str
@@ -213,7 +214,8 @@ class TasksPatch(BaseModel):
 
 
 class TasksFilters(BaseModel):
-    name: str|None = None
+    task_id: uuid.UUID|None = None
+    subject_id: uuid.UUID|None = None
 
     model_config = {
         "json_schema_extra": {
@@ -223,3 +225,21 @@ class TasksFilters(BaseModel):
             }
         }
     }
+
+
+class SubjectFilterItem(BaseModelConfig):
+    """Элемент фильтра предмета: id и имя"""
+    id: uuid.UUID
+    name: str
+
+
+class TaskFilterItem(BaseModelConfig):
+    """Элемент фильтра задачи: id и имя"""
+    id: uuid.UUID
+    name: str
+
+
+class TasksFiltersReadSchema(BaseModelConfig):
+    """Схема для получения фильтров задач для учителя"""
+    subjects: list[SubjectFilterItem]
+    tasks: list[TaskFilterItem]

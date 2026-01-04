@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_async_session
 from app.models.model_users import Users
-from app.schemas.schema_tasks import TaskCreate, TaskRead, SchemaTask, TasksFilters
+from app.schemas.schema_tasks import TaskCreate, TaskRead, SchemaTask, TasksFilters, TasksFiltersReadSchema, TasksReadEasy
 from app.services.service_tasks import ServiceTasks
 from app.services.service_work import ServiceWork
 from app.utils.oAuth import get_current_user
@@ -21,7 +21,17 @@ async def create(
     service = ServiceTasks(session)
     return await service.create(teacher, data)
 
-@router.get("")
+@router.get("/filters", response_model=TasksFiltersReadSchema)
+async def get_filters(
+    session: AsyncSession = Depends(get_async_session),
+    teacher: Users = Depends(get_current_user)
+):
+    """Получение доступных фильтров для списка задач: список предметов и задач"""
+    service = ServiceTasks(session)
+    return await service.get_filters(teacher)
+
+
+@router.get("", response_model=list[TasksReadEasy])
 async def get_all(
     filters: TasksFilters = Depends(),
     session: AsyncSession = Depends(get_async_session),
