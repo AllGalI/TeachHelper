@@ -531,10 +531,19 @@
   {
     "id": "uuid",
     "name": "string",
+    "subject_id": "uuid",
+    "subject": "string",
     "updated_at": "datetime"
   }
 ]
 ```
+
+**Типы данных:**
+- `id`: UUID - идентификатор задачи
+- `name`: string - название задачи
+- `subject_id`: UUID - идентификатор предмета
+- `subject`: string - название предмета
+- `updated_at`: datetime - дата и время последнего обновления
 
 ---
 

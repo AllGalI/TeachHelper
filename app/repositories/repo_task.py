@@ -112,17 +112,20 @@ class RepoTasks():
             select(
                 Tasks.id,
                 Tasks.name,
+                Tasks.subject_id,
+                Subjects.name.label("subject"),  # Название предмета
                 Tasks.updated_at
             )
+            .join(Subjects, Tasks.subject_id == Subjects.id)
             .where(Tasks.teacher_id == teacher_id)
         )
         
-        # Применяем фильтр по имени, если указан
-        if filters.name is not None:
+        # Применяем фильтр по task_id, если указан
+        if filters.task_id is not None:
             stmt = stmt.where(Tasks.id == filters.task_id)
 
         if filters.subject_id is not None:
-            stmt = stmt.where(Tasks.subsubject_id == filters.subject_id)
+            stmt = stmt.where(Tasks.subject_id == filters.subject_id)
         
         result = await self.session.execute(stmt)
         return result.mappings().all()

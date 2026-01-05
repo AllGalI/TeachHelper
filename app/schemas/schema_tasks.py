@@ -182,6 +182,8 @@ class TaskRead(BaseModel):
 class TasksReadEasy(BaseModel):
     id: uuid.UUID
     name: str
+    subject_id: uuid.UUID
+    subject: str
     updated_at: datetime
 
     model_config = {
@@ -190,6 +192,8 @@ class TasksReadEasy(BaseModel):
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174001",
                 "name": "Задача по математике",
+                "subject_id": "b1697c3a-5486-4bea-8aed-4e2552be92f3",
+                "subject": "Математика",
                 "updated_at": "2023-10-26T12:00:00"
             }
         }
