@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions.responses import ErrorNotExists, ErrorPermissionDenied, ErrorRolePermissionDenied, Success
 from app.models.model_comments import Comments
-from app.models.model_files import Files
 from app.models.model_tasks import Exercises, Tasks
 from app.models.model_users import  RoleUser, Users, teachers_students
 from app.models.model_works import Answers, StatusWork, Works

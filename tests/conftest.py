@@ -8,7 +8,6 @@ from sqlalchemy import insert
 
 from app.config.boto import get_boto_client
 from app.models.model_classroom import Classrooms
-from app.models.model_files import Files, answers_files
 from app.models.model_subjects import Subjects
 from app.models.model_tasks import Criterions, Exercises, Tasks
 from app.models.model_users import Users, teachers_students

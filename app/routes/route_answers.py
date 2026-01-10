@@ -1,12 +1,9 @@
 import uuid
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db import get_async_session
-from app.models.model_files import FileEntity
 from app.models.model_users import Users
-from app.schemas.schema_work import AnswerRead, AnswerUpdate
 from app.services.service_answers import ServiceAnswers
-from app.services.service_files import ServiceFiles
 from app.utils.oAuth import get_current_user
 
  
