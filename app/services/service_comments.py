@@ -64,8 +64,7 @@ class ServiceComments(ServiceBase):
 
     async def create(
         self,
-        answer_id: uuid.UUID,
-        comments: list[AICommentDTO],
+        comment: AICommentDTO,
         user: Users,
     ):
         try:
@@ -74,19 +73,17 @@ class ServiceComments(ServiceBase):
             """
             Добавить пользователся HtrClient и дать ему возможность создавать комментарии
             """
-            orm_comments: list[Comments] = []
 
-            for comment in comments:
-                comment_orm = Comments(
-                    answer_id=answer_id,
-                    answer_file_id=comment.image_file_id,
-                    description=comment.description,
-                    type_id=comment.type_id,
-                    human=True,
-                )
-                comment_orm.coordinates.extend(comment.coordinates)
+            comment_orm = Comments(
+                answer_id=comment.answer_id,
+                answer_file_id=comment.image_file_id,
+                description=comment.description,
+                type_id=comment.type_id,
+                human=True,
+            )
+            comment_orm.coordinates.extend(comment.coordinates)
 
-            self.session.add_all(orm_comments)
+            self.session.add(comment_orm)
             await self.session.commit()
             return Success()
 

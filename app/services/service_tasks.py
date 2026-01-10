@@ -82,7 +82,6 @@ class ServiceTasks(ServiceBase):
             raise
 
         except Exception as exc:
-            print(exc)
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
 

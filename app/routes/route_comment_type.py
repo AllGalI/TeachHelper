@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_async_session
 from app.models.model_users import Users
-from app.services.service_comment_types import ServiceCommentTypes, SchemaCommentTypesBase
+from app.services.service_comment_types import SchemaCommentTypesRead, ServiceCommentTypes, SchemaCommentTypesBase
 from app.utils.oAuth import get_current_user
 
 router = APIRouter(prefix="/comment_types", tags=["Comment Types"])
@@ -23,7 +23,7 @@ async def create_comment_type(
 
 
 # comment_types: получить все по предмету
-@router.get("")
+@router.get("", response_model=list[SchemaCommentTypesRead])
 async def get_comment_types(
     subject_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),

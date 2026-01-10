@@ -56,6 +56,7 @@ class ExerciseRead(ExerciseCreate):
     description: str
     order_index: int
     criterions: list[ExerciseCriterionRead]
+    file_keys: list[str] | None = None  # Ключи файлов из хранилища
     
     model_config = {
         "from_attributes": True,
@@ -117,6 +118,7 @@ class SchemaExercise(BaseModel):
     updated_at:  datetime|None = None
     created_at:  datetime|None = None
     criterions:  list[ExerciseCriterionsSchema]
+    file_keys:   list[str] | None = None  # Ключи файлов из хранилища
 
     model_config = {
         "from_attributes": True,

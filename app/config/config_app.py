@@ -23,7 +23,9 @@ class Settings(BaseSettings):
     
     
     # MinIO
-    MINIO_BUCKET: str = "teachhelper"  # Единый bucket для всех файлов
+    BUCKET_TEMP: str = "temp"
+    BUCKET_PERMANENT: str = "permanent"
+
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

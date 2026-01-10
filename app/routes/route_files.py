@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_async_session
-from app.models.model_files import FileEntity
 from app.models.model_users import Users
 from app.services.service_files import ServiceFiles
 from app.utils.oAuth import get_current_user
@@ -11,12 +10,9 @@ from app.utils.oAuth import get_current_user
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
-
 @router.post("")
-async def upload_files(
-    entity: FileEntity,
-    entity_id: uuid.UUID,
-    files: list[UploadFile],
+async def upload_file(
+    filename: str,
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user)
 ):
@@ -28,14 +24,16 @@ async def upload_files(
     Все файлы сохраняются в единый bucket, указанный в настройках.
     Возвращает список созданных файлов с метаданными.
     """
+
     service = ServiceFiles(session)
-    return await service.create(entity=entity, entity_id=entity_id, files=files, user=user)
+    return await service.create(filename)
+
 
 @router.delete("/{id}")
 async def delete(
-    id: uuid.UUID,
+    keys: list[str],
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user)
 ):
     service = ServiceFiles(session)
-    return await service.delete(id, user)
+    return await service.delete(keys)

@@ -2,7 +2,6 @@ import uuid
 from pydantic import BaseModel
 
 from app.models.model_comments import Coordinates
-from app.schemas.schema_files import FileSchema
 from app.services.schema_base import BaseModelConfig
 
 
@@ -14,7 +13,7 @@ class Coordinates(BaseModelConfig):
 
 class AICommentDTO(BaseModelConfig):
     answer_id: uuid.UUID
-    image_file_id: uuid.UUID
+    answer_file_key: str  # Ключ файла ответа из хранилища
     description: str
     type_id: uuid.UUID
     coordinates: list[Coordinates]
@@ -29,7 +28,8 @@ class AIWorkDTO(BaseModelConfig):
 
 
 class CommentCreate(BaseModel):
-    image_file_id: uuid.UUID
+    answer_id: uuid.UUID
+    answer_file_key: str  # Ключ файла ответа из хранилища
     description: str
     type_id: uuid.UUID
     coordinates: list[Coordinates]
@@ -37,10 +37,7 @@ class CommentCreate(BaseModel):
 
 class CommentRead(CommentCreate):
     id: uuid.UUID
-    answer_id: uuid.UUID
-    type_id: uuid.UUID
-    description: str
-    files: list[FileSchema]|None = None
+    file_keys: list[str] | None = None  # Ключи файлов из хранилища
 
     model_config = {
         "from_attributes": True,

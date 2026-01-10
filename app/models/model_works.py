@@ -2,7 +2,7 @@ from datetime import datetime
 import enum
 import uuid
 
-from sqlalchemy import UUID, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Table
+from sqlalchemy import ARRAY, UUID, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Table
 from app.models.base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,15 +29,9 @@ class Answers(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     work_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("works.id", ondelete="CASCADE"), nullable=False)
     exercise_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="CASCADE"))
+    text: Mapped[str] = mapped_column(String, default='')
     general_comment: Mapped[str] = mapped_column(String, default='')
-
-    files: Mapped[list["Files"]] = relationship(
-        "Files",
-        secondary="answers_files",
-        backref="answer",
-        cascade="all, delete-orphan",
-        single_parent=True
-    )
+    file_keys: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=True)
 
     exercise: Mapped["Exercises"] = relationship("Exercises", backref="answer")
     work: Mapped["Works"] = relationship("Works", back_populates="answers")

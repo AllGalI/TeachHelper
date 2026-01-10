@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.models.model_works import StatusWork
 from app.schemas.schema_comment import CommentRead
-from app.schemas.schema_files import FileSchema
+from app.schemas.schema_tasks import SchemaTask
 from app.services.schema_base import BaseModelConfig
 
 
@@ -39,7 +39,8 @@ class AssessmentUpdate(BaseModel):
 class AnswerBase(BaseModel):
     work_id:     uuid.UUID
     exercise_id: uuid.UUID
-    files:       list[FileSchema]
+    file_keys:   list[str] | None = None  # Ключи файлов из хранилища
+    text:        str
 
 class AnswerRead(AnswerBase):
     id:          uuid.UUID
@@ -68,6 +69,10 @@ class WorkRead(WorkBase):
     model_config = {
         "from_attributes": True,
     }
+
+class DetailWorkTeacher(BaseModelConfig):
+    task: SchemaTask
+    work: WorkRead
 
 class WorkUpdate(WorkRead):
     answers: list[AnswerUpdate]
@@ -111,4 +116,5 @@ class SmartFiltersWorkStudent(BaseModelConfig):
 
     min: Optional[datetime] = None
     max: Optional[datetime] = None
+
 

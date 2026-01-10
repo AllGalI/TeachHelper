@@ -472,6 +472,7 @@
       "task_id": "uuid",
       "updated_at": "datetime",
       "created_at": "datetime",
+      "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
       "criterions": [
         {
           "id": "uuid",
@@ -572,6 +573,7 @@
       "name": "Посчитай 10",
       "description": "Очень важно",
       "order_index": 1,
+      "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
       "criterions": [
         {
           "id": "uuid",
@@ -664,6 +666,7 @@
       "task_id": "uuid",
       "updated_at": "datetime",
       "created_at": "datetime",
+      "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
       "criterions": [
         {
           "id": "uuid",
@@ -789,9 +792,141 @@
 **Требует аутентификации:** Да
 
 **Path параметры:**
-- `id`: UUID
+- `id`: UUID (ID работы)
 
-**Ответ:** `200 OK` (детали зависят от реализации)
+**Ответ:** `200 OK`
+```json
+{
+  "task": {
+    "id": "uuid",
+    "name": "string",
+    "description": "string",
+    "deadline": "datetime",
+    "subject_id": "uuid",
+    "teacher_id": "uuid",
+    "updated_at": "datetime",
+    "created_at": "datetime",
+    "exercises": [
+      {
+        "id": "uuid",
+        "name": "string",
+        "description": "string",
+        "order_index": 0,
+        "task_id": "uuid",
+        "updated_at": "datetime",
+        "created_at": "datetime",
+        "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
+        "criterions": [
+          {
+            "id": "uuid",
+            "name": "string",
+            "score": 0,
+            "exercise_id": "uuid",
+            "updated_at": "datetime",
+            "created_at": "datetime"
+          }
+        ]
+      }
+    ]
+  },
+  "work": {
+    "id": "uuid",
+    "task_id": "uuid",
+    "student_id": "uuid",
+    "finish_date": "datetime",
+    "status": "pending",
+    "answers": [
+      {
+        "id": "uuid",
+        "work_id": "uuid",
+        "exercise_id": "uuid",
+        "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
+        "text": "string",
+        "assessments": [
+          {
+            "id": "uuid",
+            "points": 0
+          }
+        ],
+        "comments": [
+          {
+            "id": "uuid",
+            "answer_id": "uuid",
+            "type_id": "uuid",
+            "description": "string",
+            "answer_file_key": "string", // ключ файла ответа из хранилища
+            "coordinates": [
+              {
+                "x1": 0.0,
+                "y1": 0.0,
+                "x2": 0.0,
+                "y2": 0.0
+              }
+            ],
+            "file_keys": ["string"] | null // опционально, ключи файлов из хранилища
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Типы данных:**
+
+**task** (SchemaTask):
+- `id`: UUID - идентификатор задачи
+- `name`: string - название задачи
+- `description`: string - описание задачи
+- `deadline`: datetime|null - срок выполнения (опционально)
+- `subject_id`: UUID - идентификатор предмета
+- `teacher_id`: UUID - идентификатор учителя
+- `updated_at`: datetime|null - дата последнего обновления
+- `created_at`: datetime|null - дата создания
+- `exercises`: array[SchemaExercise] - список упражнений
+  - `id`: UUID|null - идентификатор упражнения
+  - `name`: string - название упражнения
+  - `description`: string - описание упражнения
+  - `order_index`: int - порядковый номер
+  - `task_id`: UUID - идентификатор задачи
+  - `updated_at`: datetime|null - дата последнего обновления
+  - `created_at`: datetime|null - дата создания
+  - `file_keys`: array[string]|null - опционально, ключи файлов из хранилища
+  - `criterions`: array[ExerciseCriterionsSchema] - список критериев оценки
+    - `id`: UUID|null - идентификатор критерия
+    - `name`: string - название критерия
+    - `score`: int - максимальный балл
+    - `exercise_id`: UUID - идентификатор упражнения
+    - `updated_at`: datetime|null - дата последнего обновления
+    - `created_at`: datetime|null - дата создания
+
+**work** (WorkRead):
+- `id`: UUID - идентификатор работы
+- `task_id`: UUID - идентификатор задачи
+- `student_id`: UUID - идентификатор ученика
+- `finish_date`: datetime|null - дата завершения (опционально)
+- `status`: StatusWork - статус работы (enum: "pending", "in_progress", "completed", "checked")
+- `answers`: array[AnswerRead] - список ответов
+  - `id`: UUID - идентификатор ответа
+  - `work_id`: UUID - идентификатор работы
+  - `exercise_id`: UUID - идентификатор упражнения
+  - `file_keys`: array[string]|null - опционально, ключи файлов из хранилища
+  - `text`: string - текст ответа
+  - `assessments`: array[AssessmentRead] - список оценок
+    - `id`: UUID - идентификатор оценки
+    - `points`: int - количество баллов
+  - `comments`: array[CommentRead] - список комментариев
+    - `id`: UUID - идентификатор комментария
+    - `answer_id`: UUID - идентификатор ответа
+    - `type_id`: UUID - идентификатор типа комментария
+    - `description`: string - описание комментария
+    - `answer_file_key`: string - ключ файла ответа из хранилища
+    - `coordinates`: array[Coordinates] - координаты на изображении
+      - `x1`: float - координата X1
+      - `y1`: float - координата Y1
+      - `x2`: float - координата X2
+      - `y2`: float - координата Y2
+    - `file_keys`: array[string]|null - опционально, ключи файлов из хранилища
 
 ---
 
@@ -837,7 +972,7 @@
 [
   {
     "answer_id": "uuid",
-    "image_file_id": "uuid",
+    "answer_file_key": "string", // ключ файла ответа из хранилища
     "description": "string",
     "type_id": "uuid",
     "coordinates": [
@@ -873,7 +1008,7 @@
 ```json
 [
   {
-    "image_file_id": "uuid",
+    "answer_file_key": "string", // ключ файла ответа из хранилища
     "description": "string",
     "type_id": "uuid",
     "coordinates": [
@@ -1033,9 +1168,23 @@
 **Требует аутентификации:** Да
 
 **Query параметры:**
-- `subject_id`: UUID
+- `subject_id`: UUID (ID предмета)
 
-**Ответ:** `200 OK` (массив типов комментариев)
+**Ответ:** `200 OK`
+```json
+[
+  {
+    "id": "uuid",
+    "short_name": "string",
+    "name": "string"
+  }
+]
+```
+
+**Типы данных:**
+- `id`: UUID - идентификатор типа комментария
+- `short_name`: string - краткое название типа комментария
+- `name`: string - полное название типа комментария
 
 ---
 

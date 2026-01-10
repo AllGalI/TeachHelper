@@ -7,10 +7,9 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.boto import get_boto_client
+from app.config.boto import delete_files_from_s3, get_boto_client, get_upload_link_to_temp
 from app.config.config_app import settings
 from app.exceptions.responses import *
-from app.models.model_files import FileEntity, Files, answers_files, comments_files, exercises_files, tasks_files
 from app.models.model_users import RoleUser, Users
 from app.schemas.schema_files import FileSchema
 from app.utils.file_validation import validate_files
@@ -21,56 +20,10 @@ from app.services.service_base import ServiceBase
 
 class ServiceFiles(ServiceBase):
 
-    async def create(self, entity: FileEntity, entity_id: uuid.UUID, files: list[UploadFile], user: Users):
+    async def create(self, filename: str):
         try:
-            # Валидация файлов перед загрузкой
-            await validate_files(files)
-            if user.role is RoleUser.student:
-                if entity is not FileEntity.answer:
-                    raise HTTPException(403, "Student can load only files for answers")
-
-            if user.role is RoleUser.teacher:
-                if entity is FileEntity.answer:
-                    raise HTTPException(403, "Teacher can't load files for answers")
-            
-            tables_map = {
-                "comments_files": comments_files,
-                "answers_files": answers_files,
-                "tasks_files": tasks_files,
-                "exercises_files": exercises_files,
-            }
-
-
-            files_orm = []
-            async with get_boto_client() as s3:
-                for file in files:
-                    file_id = uuid.uuid4()
-                    file_key = f"{file_id}/{file.filename}"
-                    await s3.upload_fileobj(file.file, settings.MINIO_BUCKET, file_key)
-
-                    file_orm = Files(
-                        id=file_id,
-                        user_id=user.id,
-                        filename=file.filename,
-                        original_size=file.size,
-                        original_mime=file.content_type,
-                    )
-                    self.session.add(file_orm)
-                    await self.session.flush([file_orm])
-                    await self.session.execute(
-                        insert(tables_map[f"{entity.value}s_files"])
-                        .values({
-                            "file_id":file_id,
-                            f"{entity.value}_id": entity_id
-                        }))
-                    files_orm.append(file_orm)
-                    
-            await self.session.commit()
-            return JSONResponse(
-                content={'files': [FileSchema.model_validate(f).model_dump(mode="json") for f in files_orm]},
-                status_code=201
-            )
-
+            response = await get_upload_link_to_temp(filename)
+            return response
         except HTTPException:
             await self.session.rollback()
             raise
@@ -81,35 +34,15 @@ class ServiceFiles(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-    async def delete(self, file_id: uuid.UUID, user: Users):
+    async def delete(self, keys: list[str]):
         try:
-            file = await self.session.get(Files, file_id)
-            if file is None:
-                raise ErrorNotExists(file_id, Files)
-            
-            if file.user_id != user.id and user.role is not RoleUser.admin:
-                raise HTTPException(403, "This user have not permission for this operation")
-
-            file_key = f"{file.id}/{file.filename}"
-            async with get_boto_client() as s3:
-                await s3.delete_object(
-                    Bucket=settings.MINIO_BUCKET,
-                    Key=file_key
-                )
-
-            await self.session.delete(file)
-            await self.session.commit()
+            await delete_files_from_s3(keys)
             return JSONResponse(
                 {"status": "ok"},
                 200
             )
 
-        except HTTPException:
-            await self.session.rollback()
-            raise
-        
         except Exception as exc:
             logger.exception(exc)
-            await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
 

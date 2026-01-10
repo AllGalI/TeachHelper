@@ -8,7 +8,7 @@ from app.db import get_async_session
 from app.models.model_works import StatusWork
 from app.models.model_users import Users
 from app.schemas.schema_comment import *
-from app.schemas.schema_work import SmartFiltersWorkStudent, SmartFiltersWorkTeacher
+from app.schemas.schema_work import DetailWorkTeacher, SmartFiltersWorkStudent, SmartFiltersWorkTeacher
 from app.services.service_comments import ServiceComments
 from app.services.service_work import ServiceWork, WorkEasyRead
 from app.utils.oAuth import get_current_user
@@ -55,7 +55,7 @@ async def get_works_list_student(
     service = ServiceWork(session)
     return await service.get_works_list_student(user, filters)
 
-@router.get("/{id}")
+@router.get("/{id}", response_model=DetailWorkTeacher)
 async def get(
     id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),

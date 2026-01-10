@@ -14,7 +14,7 @@ from app.models.model_users import  RoleUser, Users, teachers_students
 from app.models.model_works import Answers, StatusWork, Works
 from app.repositories.repo_task import RepoTasks
 from app.schemas.schema_tasks import SchemaTask
-from app.schemas.schema_work import  SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkEasyRead, WorkRead
+from app.schemas.schema_work import  DetailWorkTeacher, SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkEasyRead, WorkRead
 from app.config.rabbit import WorkRequestDTO, channel
 from app.utils.logger import logger
 from app.transformers.transformer_work import TransformerWorks
@@ -161,10 +161,10 @@ class ServiceWork(ServiceBase):
             task_db = response.scalars().first()
 
             return JSONResponse(
-                content={
-                    "task": SchemaTask.model_validate(task_db).model_dump(mode="json"),
-                    "work": WorkRead.model_validate(work_db).model_dump(mode="json")
-                },
+                content=DetailWorkTeacher(
+                    task=SchemaTask.model_validate(task_db),
+                    work=WorkRead.model_validate(work_db)
+                ).model_dump(mode="json"),
                 status_code=status.HTTP_200_OK
             )
 

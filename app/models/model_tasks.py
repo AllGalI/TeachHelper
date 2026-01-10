@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import UUID, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import ARRAY, UUID, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from app.models.base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,13 +28,7 @@ class Exercises(Base):
         passive_deletes=True,
     )
 
-    files: Mapped[list["Files"]] = relationship(
-        "Files",
-        secondary="exercises_files",
-        backref="exercise",
-        cascade="all, delete-orphan",
-        single_parent=True
-    )
+    file_keys: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=True)
 
 class Tasks(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
@@ -43,6 +37,7 @@ class Tasks(Base):
     name: Mapped[str] = mapped_column(String(), nullable=False)
     description: Mapped[str] = mapped_column(String())
     deadline: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    image_keys: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=True)
 
     __table_args__ = (
         UniqueConstraint('name', 'subject_id', 'teacher_id', name='_name_subject_teacher_uc'),
@@ -66,14 +61,6 @@ class Tasks(Base):
         passive_deletes=True,
     )
 
-    files: Mapped[list["Files"]] = relationship(
-        "Files",
-        secondary="tasks_files",
-        backref="task",
-        cascade="all, delete-orphan",
-        single_parent=True
-
-    )
 
 
 
