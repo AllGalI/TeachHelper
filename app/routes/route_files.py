@@ -4,15 +4,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_async_session
 from app.models.model_users import Users
+from app.schemas.schema_files import UploadFileResponse
 from app.services.service_files import ServiceFiles
 from app.utils.oAuth import get_current_user
 
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
-@router.post("")
+@router.post("/get_upload_link", response_model=UploadFileResponse)
 async def upload_file(
-    filename: str,
+    file_name: str,
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user)
 ):
@@ -26,10 +27,10 @@ async def upload_file(
     """
 
     service = ServiceFiles(session)
-    return await service.create(filename)
+    return await service.create(file_name, user)
 
 
-@router.delete("/{id}")
+@router.delete("/")
 async def delete(
     keys: list[str],
     session: AsyncSession = Depends(get_async_session),

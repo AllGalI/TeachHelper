@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-import jwt
-from jose import ExpiredSignatureError, JWTError
+from jose import ExpiredSignatureError, jwt, JWTError
 from fastapi import HTTPException, Request, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession

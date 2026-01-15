@@ -54,7 +54,6 @@ class ServiceCommentTypes(ServiceBase):
 
             if not subject:
                 raise ErrorNotExists(Subjects)
-            print(subject.comment_types)
             return [
                 SchemaCommentTypesRead.model_validate(c_type).model_dump(mode="json")
                 for c_type in subject.comment_types

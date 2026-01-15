@@ -8,7 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.config.config_app import settings
 from app.models.model_tasks import Criterions, Exercises, Tasks
 from app.models.model_users import Users
-from app.schemas.schema_tasks import ExerciseCreate, ExerciseCriterionCreate, TaskCreate, SchemaTask, TasksReadEasy
+from app.schemas.schema_tasks import ExerciseCreate, ExerciseCriterionCreate, TaskCreate, SchemaTask, TasksListItem
 from app.utils.oAuth import create_access_token
 
 @pytest_asyncio.fixture(scope="function")

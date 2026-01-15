@@ -12,7 +12,7 @@ from app.models.model_tasks import Exercises, Tasks
 from app.models.model_users import  RoleUser, Users, teachers_students
 from app.models.model_works import Answers, StatusWork, Works
 from app.repositories.repo_task import RepoTasks
-from app.schemas.schema_tasks import SchemaTask
+from app.schemas.schema_tasks import TaskRead
 from app.schemas.schema_work import  DetailWorkTeacher, SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkEasyRead, WorkRead
 from app.config.rabbit import WorkRequestDTO, channel
 from app.utils.logger import logger
@@ -104,7 +104,7 @@ class ServiceWork(ServiceBase):
             if task_db is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-            task = SchemaTask.model_validate(task_db)
+            task = TaskRead.model_validate(task_db)
             if task.teacher_id != teacher.id:
                 raise ErrorPermissionDenied()
 

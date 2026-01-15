@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import mimetypes
 import time
 import uuid
 import aioboto3
@@ -11,6 +12,8 @@ from minio.commonconfig import ENABLED, Filter
 from minio.lifecycleconfig import LifecycleConfig, Rule, Expiration, AbortIncompleteMultipartUpload
 from app.config.config_app import settings
 from dotenv import load_dotenv
+
+from app.schemas.schema_files import UploadFileResponse
 
 load_dotenv()
 
@@ -24,33 +27,8 @@ mc = Minio(
 )
 
 # Создаем бакеты, если их нет
-for b in [settings.BUCKET_PERMANENT, settings.BUCKET_TEMP]:
-    if not mc.bucket_exists(b):
-        mc.make_bucket(b)
-
-# --- Настройка Жизненного Цикла (Lifecycle) ---
-def set_minio_lifecycle(bucket_name):
-    config = LifecycleConfig(
-        [
-            Rule(
-                status=ENABLED,
-                rule_id="DeleteTemporaryFiles",
-                # ВАЖНО: prefix="" означает удалять ВСЁ в этом бакете
-                rule_filter=Filter(prefix=""), 
-                expiration=Expiration(days=1),
-                abort_incomplete_multipart_upload=AbortIncompleteMultipartUpload(
-                    days_after_initiation=1
-                ),
-            ),
-        ],
-    )
-    try:
-        mc.set_bucket_lifecycle(bucket_name, config)
-        print(f"Lifecycle policy установлена для: {bucket_name}")
-    except Exception as e:
-        print(f"Ошибка Lifecycle: {e}")
-
-set_minio_lifecycle(settings.BUCKET_TEMP)
+if not mc.bucket_exists(settings.BUCKET_PERMANENT):
+    mc.make_bucket(settings.BUCKET_PERMANENT)
 
 # --- Асинхронные функции для работы с файлами ---
 
@@ -67,66 +45,70 @@ async def get_boto_client():
     ) as client:
         yield client
 
-async def get_upload_link_to_temp(original_filename: str):
+
+
+async def get_upload_link_to_temp(original_filename: str) -> UploadFileResponse:
     unique_base = f"{uuid.uuid4()}-{time.time()}"
     file_hash = hashlib.sha256(unique_base.encode()).hexdigest()[:15]
-    extension = original_filename.split('.')[-1] if '.' in original_filename else ''
-    new_filename = f"{file_hash}.{extension}" if extension else file_hash
-    
+    extension, _ = mimetypes.guess_type(original_filename)
+    new_filename = f"{file_hash}.{extension.split('/')[1]}" if extension else file_hash
+
     async with get_boto_client() as s3:
         upload_url = await s3.generate_presigned_url(
             'put_object',
-            Params={'Bucket': settings.BUCKET_TEMP, 'Key': new_filename},
+            Params={
+                'Bucket': settings.BUCKET_PERMANENT,
+                'Key': new_filename,
+                'ContentType': extension
+            },
             ExpiresIn=3600
         )
-    return {"file_name": new_filename, "upload_url": upload_url}
 
-async def confirm_file_upload(file_name: str):
-    """
-    Переносит файл из бакета TEMP в бакет PERMANENT.
-    """
-    async with get_boto_client() as s3:
-        try:
-            # Ключ (путь) в обоих бакетах одинаковый — просто имя файла
-            copy_source = {
-                'Bucket': settings.BUCKET_TEMP,
-                'Key': file_name
-            }
-            
-            # Копируем из TEMP в PERMANENT
-            await s3.copy_object(
-                Bucket=settings.BUCKET_PERMANENT,
-                CopySource=copy_source,
-                Key=file_name
-            )
-            
-            # Удаляем из TEMP
-            await s3.delete_object(Bucket=settings.BUCKET_TEMP, Key=file_name)
-            
-            print(f"Файл {file_name} подтвержден.")
-            return file_name
-        except Exception as e:
-            print(f"Ошибка подтверждения: {e}")
-            raise e
+    return UploadFileResponse(
+      key=new_filename,
+      upload_url=upload_url,
+    )
 
 async def get_object_photos(file_keys: list[str]):
     async with get_boto_client() as s3:
-        tasks = [
-            s3.generate_presigned_url(
+        result = {}
+        for key in file_keys:
+            # Метод generate_presigned_url НЕ требует await
+            url = await s3.generate_presigned_url(
                 'get_object',
                 Params={'Bucket': settings.BUCKET_PERMANENT, 'Key': key},
                 ExpiresIn=3600
-            ) for key in file_keys
-        ]
-        return await asyncio.gather(*tasks)
+            )
+
+            result[key] = url
+        return result
+
+async def get_presigned_url(filekey: str):
+    try:
+        async with get_boto_client() as s3:
+            url = await s3.generate_presigned_url(
+                'get_object',
+                Params={'Bucket': settings.BUCKET_PERMANENT, 'Key': filekey},
+                ExpiresIn=3600
+            )
+            return url
+    except Exception as e:
+      print(f"Ошибка получения ссылки: {e}")
+      raise e
+
+
 
 async def delete_files_from_s3(file_keys: list[str]):
     if not file_keys: return
     async with get_boto_client() as s3:
         try:
             objects = [{'Key': k} for k in file_keys]
-            return await s3.delete_objects(
+            await s3.delete_objects(
                 Bucket=settings.BUCKET_PERMANENT,
+                Delete={'Objects': objects, 'Quiet': True}
+            )
+            await s3.delete_objects(
+                Bucket=settings.BUCKET_TEMP,
                 Delete={'Objects': objects, 'Quiet': True}
             )
         except Exception as e:

@@ -19,7 +19,6 @@ class RepoUser:
 
     async def create(self, user: Users) -> Users:
         self.session.add(user)
-        print(user.__dict__)
         return user
 
     async def get(self, user_id: uuid.UUID) -> Optional[Users]:

@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.models.model_tasks import Exercises, Tasks
 from app.models.model_works import Assessments, Answers, Works
 from app.models.model_subjects import Subjects
-from app.schemas.schema_tasks import SchemaTask, TasksFilters
+from app.schemas.schema_tasks import TaskRead, TasksFilters
 from app.utils.logger import logger
 
 class RepoTasks():
@@ -21,7 +21,8 @@ class RepoTasks():
             .where(Tasks.id == id)
             .options(
                 selectinload(Tasks.exercises)
-                .selectinload(Exercises.criterions)
+                .selectinload(Exercises.criterions),
+                selectinload(Tasks.exercises).selectinload(Exercises.files)
             )
         )
         response = await self.session.execute(stmt)
@@ -29,7 +30,7 @@ class RepoTasks():
 
     async def create_works(
         self,
-        task: SchemaTask,
+        task: TaskRead,
         students_ids: list[uuid.UUID]
     ):
         stmt = select(Works.student_id).where(Works.task_id == task.id).where(Works.student_id.in_(students_ids))

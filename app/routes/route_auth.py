@@ -13,7 +13,7 @@ from app.utils.oAuth import get_current_user
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
 
-@router.post("/register", response_model=UsersPageSchema)
+@router.post("/register", response_model=UserRead)
 async def register(user: UserRegister, session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
     return await service.register(user)

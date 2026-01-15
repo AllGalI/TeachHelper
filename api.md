@@ -198,7 +198,19 @@
 
 **Требует аутентификации:** Да
 
-**Ответ:** `200 OK` (массив предметов)
+**Ответ:** `200 OK`
+```json
+[
+  {
+    "id": "uuid",
+    "name": "string"
+  }
+]
+```
+
+**Типы данных:**
+- `id`: UUID - идентификатор предмета
+- `name`: string - название предмета
 
 ---
 
@@ -424,24 +436,58 @@
 
 ## 6. Задания (`/tasks`)
 
-### 6.1 Создать задание
-**POST** `/tasks`
+### 6.1 Начать создание задания
+**GET** `/tasks/create`
 
 **Требует аутентификации:** Да (только для учителя)
+
+**Ответ:** `200 OK`
+```json
+{
+  "teacher_id": "uuid",
+  "id": null,
+  "subject_id": null,
+  "name": null,
+  "description": null,
+  "deadline": null,
+  "exercises": []
+}
+```
+
+**Типы данных:**
+- `teacher_id`: UUID - идентификатор учителя (заполняется автоматически)
+- `id`: UUID|null - идентификатор задачи (null при создании)
+- `subject_id`: UUID|null - идентификатор предмета (опционально)
+- `name`: string|null - название задачи (опционально)
+- `description`: string|null - описание задачи (опционально)
+- `deadline`: datetime|null - срок выполнения (опционально)
+- `exercises`: array - список упражнений (пустой при начале создания)
+
+**Примечание:** Этот эндпоинт возвращает начальную структуру для создания задания.
+
+---
+
+### 6.2 Создать задание
+**POST** `/tasks/create`
+
+**Требует аутентификации:** Да (только для учителя)
+
+**Схема запроса:** `TaskCreate`
 
 **Тело запроса:**
 ```json
 {
   "subject_id": "uuid",
-  "name": "Задача по математике",
-  "description": "Решить 10 уравнений",
+  "name": "Задача по математике", // опционально
+  "description": "Решить 10 уравнений", // опционально
   "deadline": "2025-12-31T23:59:59", // опционально
-  "exercises": [
+  "exercises": [ // обязательное поле, минимум 1 упражнение
     {
       "name": "Посчитай 10",
       "description": "Очень важно",
       "order_index": 1,
-      "criterions": [
+      "files": ["uuid", "uuid"], // опционально, список ID файлов из хранилища
+      "criterions": [ // обязательное поле
         {
           "name": "Посчитал до 10",
           "score": 1
@@ -451,6 +497,173 @@
   ]
 }
 ```
+
+**Типы данных запроса:**
+- `subject_id`: UUID - идентификатор предмета (обязательно)
+- `name`: string|null - название задачи (опционально)
+- `description`: string|null - описание задачи (опционально)
+- `deadline`: datetime|null - срок выполнения (опционально)
+- `exercises`: array[ExerciseCreate] - список упражнений (обязательно, минимум 1)
+  - `name`: string - название упражнения (обязательно)
+  - `description`: string - описание упражнения (обязательно)
+  - `order_index`: int - порядковый номер (обязательно)
+  - `files`: array[UUID] - список ID файлов из хранилища (опционально). Файлы должны быть созданы заранее через `/files` эндпоинт
+  - `criterions`: array[CriterionCreate] - список критериев оценки (обязательно)
+    - `name`: string - название критерия (обязательно)
+    - `score`: int - максимальный балл (обязательно)
+
+**Схема ответа:** `TaskRead`
+
+**Ответ:** `201 Created`
+```json
+{
+  "id": "uuid",
+  "name": "Задача по математике",
+  "description": "Решить 10 уравнений",
+  "deadline": "2025-12-31T23:59:59",
+  "subject_id": "uuid",
+  "teacher_id": "uuid",
+  "updated_at": "datetime",
+  "created_at": "datetime",
+  "exercises": [
+    {
+      "id": "uuid",
+      "name": "Посчитай 10",
+      "description": "Очень важно",
+      "order_index": 1,
+      "task_id": "uuid",
+      "updated_at": "datetime",
+      "created_at": "datetime",
+      "files": [
+        {
+          "key": "string",
+          "file": "https://presigned-url-1"
+        }
+      ] | null,
+      "criterions": [
+        {
+          "id": "uuid",
+          "name": "Посчитал до 10",
+          "score": 1,
+          "exercise_id": "uuid",
+          "updated_at": "datetime",
+          "created_at": "datetime"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Типы данных ответа:**
+- `id`: UUID - идентификатор задачи
+- `name`: string - название задачи
+- `description`: string - описание задачи
+- `deadline`: datetime|null - срок выполнения (опционально)
+- `subject_id`: UUID - идентификатор предмета
+- `teacher_id`: UUID - идентификатор учителя
+- `updated_at`: datetime|null - дата последнего обновления
+- `created_at`: datetime|null - дата создания
+- `exercises`: array[ExerciseRead] - список упражнений
+  - `id`: UUID|null - идентификатор упражнения
+  - `name`: string - название упражнения
+  - `description`: string - описание упражнения
+  - `order_index`: int - порядковый номер
+  - `task_id`: UUID - идентификатор задачи
+  - `updated_at`: datetime|null - дата последнего обновления
+  - `created_at`: datetime|null - дата создания
+  - `files`: array[IFile]|null - список файлов (опционально)
+    - `key`: string - ключ файла в хранилище
+    - `file`: string - presigned URL для доступа к файлу
+  - `criterions`: array[CriterionUpdate] - список критериев оценки
+    - `id`: UUID|null - идентификатор критерия
+    - `name`: string - название критерия
+    - `score`: int - максимальный балл
+    - `exercise_id`: UUID - идентификатор упражнения
+
+---
+
+### 6.3 Получить фильтры для списка задач
+**GET** `/tasks/filters`
+
+**Требует аутентификации:** Да (только для учителя)
+
+**Схема ответа:** `TasksFiltersReadSchema`
+
+**Ответ:** `200 OK`
+```json
+{
+  "subjects": [
+    {
+      "id": "uuid",
+      "name": "string"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "uuid",
+      "name": "string"
+    }
+  ]
+}
+```
+
+**Типы данных ответа:**
+- `subjects`: array[SubjectFilterItem] - список предметов для фильтрации
+  - `id`: UUID - идентификатор предмета
+  - `name`: string - название предмета
+- `tasks`: array[TaskFilterItem] - список задач для фильтрации
+  - `id`: UUID - идентификатор задачи
+  - `name`: string - название задачи
+
+**Примечание:** Возвращает доступные варианты для фильтрации списка задач. Не требует передачи параметров - возвращает все доступные варианты для текущего учителя.
+
+---
+
+### 6.4 Получить все задания
+**GET** `/tasks`
+
+**Требует аутентификации:** Да (только для учителя)
+
+**Схема запроса (query параметры):** `TasksFilters`
+
+**Query параметры (фильтры):**
+- `task_id`: UUID (опционально, фильтр по ID задачи)
+- `subject_id`: UUID (опционально, фильтр по ID предмета)
+
+**Схема ответа:** `list[TasksListItem]`
+
+**Ответ:** `200 OK`
+```json
+[
+  {
+    "id": "uuid",
+    "name": "string",
+    "subject_id": "uuid",
+    "subject": "string",
+    "updated_at": "datetime"
+  }
+]
+```
+
+**Типы данных ответа:**
+- `id`: UUID - идентификатор задачи
+- `name`: string - название задачи
+- `subject_id`: UUID - идентификатор предмета
+- `subject`: string - название предмета
+- `updated_at`: datetime - дата и время последнего обновления
+
+---
+
+### 6.5 Получить задание по ID
+**GET** `/tasks/{id}`
+
+**Требует аутентификации:** Да (только для учителя)
+
+**Path параметры:**
+- `id`: UUID
+
+**Схема ответа:** `TaskRead`
 
 **Ответ:** `200 OK`
 ```json
@@ -472,7 +685,12 @@
       "task_id": "uuid",
       "updated_at": "datetime",
       "created_at": "datetime",
-      "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
+      "files": [
+        {
+          "key": "string",
+          "file": "https://presigned-url-1"
+        }
+      ] | null,
       "criterions": [
         {
           "id": "uuid",
@@ -488,107 +706,35 @@
 }
 ```
 
----
-
-### 6.2 Получить фильтры для списка задач
-**GET** `/tasks/filters`
-
-**Требует аутентификации:** Да (только для учителя)
-
-**Ответ:** `200 OK`
-```json
-{
-  "subjects": [
-    {
-      "id": "uuid",
-      "name": "string"
-    }
-  ],
-  "tasks": [
-    {
-      "id": "uuid",
-      "name": "string"
-    }
-  ]
-}
-```
-
-**Примечание:** Возвращает доступные варианты для фильтрации списка задач. Не требует передачи параметров - возвращает все доступные варианты для текущего учителя.
-
----
-
-### 6.3 Получить все задания
-**GET** `/tasks`
-
-**Требует аутентификации:** Да (только для учителя)
-
-**Query параметры (фильтры):**
-- `task_id`: UUID (опционально, фильтр по ID задачи)
-- `subject_id`: UUID (опционально, фильтр по ID предмета)
-
-**Ответ:** `200 OK`
-```json
-[
-  {
-    "id": "uuid",
-    "name": "string",
-    "subject_id": "uuid",
-    "subject": "string",
-    "updated_at": "datetime"
-  }
-]
-```
-
-**Типы данных:**
+**Типы данных ответа:**
 - `id`: UUID - идентификатор задачи
 - `name`: string - название задачи
+- `description`: string - описание задачи
+- `deadline`: datetime|null - срок выполнения (опционально)
 - `subject_id`: UUID - идентификатор предмета
-- `subject`: string - название предмета
-- `updated_at`: datetime - дата и время последнего обновления
+- `teacher_id`: UUID - идентификатор учителя
+- `updated_at`: datetime|null - дата последнего обновления
+- `created_at`: datetime|null - дата создания
+- `exercises`: array[ExerciseRead] - список упражнений
+  - `id`: UUID|null - идентификатор упражнения
+  - `name`: string - название упражнения
+  - `description`: string - описание упражнения
+  - `order_index`: int - порядковый номер
+  - `task_id`: UUID - идентификатор задачи
+  - `updated_at`: datetime|null - дата последнего обновления
+  - `created_at`: datetime|null - дата создания
+  - `files`: array[IFile]|null - список файлов (опционально)
+    - `key`: string - ключ файла в хранилище
+    - `file`: string - presigned URL для доступа к файлу
+  - `criterions`: array[CriterionUpdate] - список критериев оценки
+    - `id`: UUID|null - идентификатор критерия
+    - `name`: string - название критерия
+    - `score`: int - максимальный балл
+    - `exercise_id`: UUID - идентификатор упражнения
 
 ---
 
-### 6.4 Получить задание по ID
-**GET** `/tasks/{id}`
-
-**Требует аутентификации:** Да (только для учителя)
-
-**Path параметры:**
-- `id`: UUID
-
-**Ответ:** `200 OK`
-```json
-{
-  "id": "uuid",
-  "name": "Задача по математике",
-  "description": "Решить 10 уравнений",
-  "deadline": "2025-12-31T23:59:59",
-  "subject_id": "uuid",
-  "teacher_id": "uuid",
-  "updated_at": "datetime",
-  "created_at": "datetime",
-  "exercises": [
-    {
-      "id": "uuid",
-      "name": "Посчитай 10",
-      "description": "Очень важно",
-      "order_index": 1,
-      "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
-      "criterions": [
-        {
-          "id": "uuid",
-          "name": "Посчитал до 10",
-          "score": 1
-        }
-      ]
-    }
-  ]
-}
-```
-
----
-
-### 6.5 Создать работы по заданию
+### 6.6 Создать работы по заданию
 **POST** `/tasks/{task_id}/start`
 
 **Требует аутентификации:** Да (только для учителя)
@@ -611,13 +757,15 @@
 
 ---
 
-### 6.6 Обновить задание
+### 6.7 Обновить задание
 **PUT** `/tasks/{id}`
 
 **Требует аутентификации:** Да (только для учителя)
 
 **Path параметры:**
 - `id`: UUID
+
+**Схема запроса:** `TaskUpdate`
 
 **Тело запроса:**
 ```json
@@ -626,25 +774,54 @@
   "name": "Обновленное название",
   "description": "Обновленное описание",
   "deadline": "2025-12-31T23:59:59",
+  "subject_id": "uuid",
+  "teacher_id": "uuid",
+  "updated_at": "datetime",
+  "created_at": "datetime",
   "exercises": [
     {
       "id": "uuid",
       "name": "Посчитай 10",
       "description": "Очень важно",
       "order_index": 1,
+      "task_id": "uuid",
+      "files": ["uuid", "uuid"],
       "criterions": [
         {
           "id": "uuid",
           "name": "Посчитал до 10",
-          "score": 1
+          "score": 1,
+          "exercise_id": "uuid"
         }
       ]
     }
-  ],
-  "updated_at": "datetime",
-  "created_at": "datetime"
+  ]
 }
 ```
+
+**Типы данных запроса:**
+- `id`: UUID - идентификатор задачи
+- `name`: string - название задачи
+- `description`: string - описание задачи
+- `deadline`: datetime|null - срок выполнения (опционально)
+- `subject_id`: UUID - идентификатор предмета
+- `teacher_id`: UUID - идентификатор учителя
+- `updated_at`: datetime|null - дата последнего обновления
+- `created_at`: datetime|null - дата создания
+- `exercises`: array[ExerciseUpdate] - список упражнений
+  - `id`: UUID|null - идентификатор упражнения
+  - `name`: string - название упражнения
+  - `description`: string - описание упражнения
+  - `order_index`: int - порядковый номер
+  - `task_id`: UUID - идентификатор задачи
+  - `files`: array[string] - список ID файлов из хранилища
+  - `criterions`: array[CriterionUpdate] - список критериев оценки
+    - `id`: UUID|null - идентификатор критерия
+    - `name`: string - название критерия
+    - `score`: int - максимальный балл
+    - `exercise_id`: UUID - идентификатор упражнения
+
+**Схема ответа:** `TaskRead`
 
 **Ответ:** `200 OK`
 ```json
@@ -666,7 +843,12 @@
       "task_id": "uuid",
       "updated_at": "datetime",
       "created_at": "datetime",
-      "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
+      "files": [
+        {
+          "key": "string",
+          "file": "https://presigned-url-1"
+        }
+      ] | null,
       "criterions": [
         {
           "id": "uuid",
@@ -682,9 +864,37 @@
 }
 ```
 
+**Типы данных ответа:**
+- `id`: UUID - идентификатор задачи
+- `name`: string - название задачи
+- `description`: string - описание задачи
+- `deadline`: datetime|null - срок выполнения (опционально)
+- `subject_id`: UUID - идентификатор предмета
+- `teacher_id`: UUID - идентификатор учителя
+- `updated_at`: datetime|null - дата последнего обновления
+- `created_at`: datetime|null - дата создания
+- `exercises`: array[ExerciseRead] - список упражнений
+  - `id`: UUID|null - идентификатор упражнения
+  - `name`: string - название упражнения
+  - `description`: string - описание упражнения
+  - `order_index`: int - порядковый номер
+  - `task_id`: UUID - идентификатор задачи
+  - `updated_at`: datetime|null - дата последнего обновления
+  - `created_at`: datetime|null - дата создания
+  - `files`: array[IFile]|null - список файлов (опционально)
+    - `key`: string - ключ файла в хранилище
+    - `file`: string - presigned URL для доступа к файлу
+  - `criterions`: array[CriterionUpdate] - список критериев оценки
+    - `id`: UUID|null - идентификатор критерия
+    - `name`: string - название критерия
+    - `score`: int - максимальный балл
+    - `exercise_id`: UUID - идентификатор упражнения
+    - `updated_at`: datetime|null - дата последнего обновления
+    - `created_at`: datetime|null - дата создания
+
 ---
 
-### 6.7 Удалить задание
+### 6.8 Удалить задание
 **DELETE** `/tasks/{id}`
 
 **Требует аутентификации:** Да (только для учителя)
@@ -815,7 +1025,12 @@
         "task_id": "uuid",
         "updated_at": "datetime",
         "created_at": "datetime",
-        "file_keys": ["string"] | null, // опционально, ключи файлов из хранилища
+        "files": [
+          {
+            "key": "string",
+            "file": "https://presigned-url-1"
+          }
+        ] | null,
         "criterions": [
           {
             "id": "uuid",
@@ -872,9 +1087,9 @@
 }
 ```
 
-**Типы данных:**
+**Типы данных ответа:**
 
-**task** (SchemaTask):
+**task** (`TaskRead`):
 - `id`: UUID - идентификатор задачи
 - `name`: string - название задачи
 - `description`: string - описание задачи
@@ -883,7 +1098,7 @@
 - `teacher_id`: UUID - идентификатор учителя
 - `updated_at`: datetime|null - дата последнего обновления
 - `created_at`: datetime|null - дата создания
-- `exercises`: array[SchemaExercise] - список упражнений
+- `exercises`: array[ExerciseRead] - список упражнений
   - `id`: UUID|null - идентификатор упражнения
   - `name`: string - название упражнения
   - `description`: string - описание упражнения
@@ -891,14 +1106,14 @@
   - `task_id`: UUID - идентификатор задачи
   - `updated_at`: datetime|null - дата последнего обновления
   - `created_at`: datetime|null - дата создания
-  - `file_keys`: array[string]|null - опционально, ключи файлов из хранилища
-  - `criterions`: array[ExerciseCriterionsSchema] - список критериев оценки
+  - `files`: array[IFile]|null - опционально, список файлов из хранилища
+    - `key`: string - ключ файла в хранилище
+    - `file`: string - presigned URL для доступа к файлу
+  - `criterions`: array[CriterionUpdate] - список критериев оценки
     - `id`: UUID|null - идентификатор критерия
     - `name`: string - название критерия
     - `score`: int - максимальный балл
     - `exercise_id`: UUID - идентификатор упражнения
-    - `updated_at`: datetime|null - дата последнего обновления
-    - `created_at`: datetime|null - дата создания
 
 **work** (WorkRead):
 - `id`: UUID - идентификатор работы
@@ -1102,42 +1317,76 @@
 
 ## 11. Файлы (`/files`)
 
-### 11.1 Загрузить файлы
-**POST** `/files`
+### 11.1 Создать файл и получить ссылку для загрузки
+**POST** `/files/get_upload_link`
 
 **Требует аутентификации:** Да
 
 **Query параметры:**
-- `entity`: FileEntity (enum: "work", "answer", "comment", и т.д.)
-- `entity_id`: UUID
+- `file_name`: string - имя файла (обычно оригинальное имя файла)
 
-**Тело запроса:** `multipart/form-data`
-- `files`: List[File] (массив файлов для загрузки)
+**Схема ответа:** `UploadFileResponse`
 
 **Ответ:** `200 OK`
 ```json
-[
-  {
-    "id": "uuid",
-    "user_id": "uuid",
-    "filename": "string",
-    "original_size": 12345,
-    "original_mime": "image/jpeg"
-  }
-]
+{
+  "upload_link": "string",
+  "key": "string"
+}
 ```
+
+**Типы данных ответа:**
+- `upload_link`: string - временная ссылка (presigned URL) для загрузки файла напрямую в MinIO
+- `key`: string - ключ файла в хранилище S3
+
+**Примечание:** Этот эндпоинт возвращает временную ссылку (presigned URL) для загрузки файла напрямую в MinIO. После получения ссылки файл должен быть загружен по этой ссылке. После загрузки файл можно использовать, передав его `key` в другие эндпоинты (например, при создании задачи).
 
 ---
 
-### 11.2 Удалить файл
-**DELETE** `/files/{id}`
+### 11.2 Получить ссылку на файл
+**GET** `/files`
+
+**Требует аутентификации:** Нет
+
+**Query параметры:**
+- `file_key`: string (ключ файла в хранилище S3)
+
+**Ответ:** `200 OK`
+```json
+"https://s3-url/path/to/file?signature=..."
+```
+
+**Типы данных ответа:**
+- Ответ: string - временная ссылка (presigned URL) для получения файла из MinIO
+
+**Примечание:** Возвращает временную presigned URL ссылку для доступа к файлу из хранилища S3 по его ключу. Ссылка действительна в течение 1 часа (3600 секунд).
+
+---
+
+### 11.3 Удалить файлы
+**DELETE** `/files/`
 
 **Требует аутентификации:** Да
 
-**Path параметры:**
-- `id`: UUID
+**Тело запроса:**
+```json
+["key1", "key2", "key3"]
+```
 
-**Ответ:** `200 OK` (детали зависят от реализации)
+**Типы данных запроса:**
+- Тело запроса: array[string] - список ключей файлов для удаления из хранилища S3
+
+**Ответ:** `200 OK`
+```json
+{
+  "status": "ok"
+}
+```
+
+**Типы данных ответа:**
+- `status`: string - статус операции (всегда "ok" при успешном удалении)
+
+**Примечание:** Удаляет файлы из MinIO по их ключам. Удаление происходит как из постоянного, так и из временного бакета.
 
 ---
 
@@ -1181,7 +1430,7 @@
 ]
 ```
 
-**Типы данных:**
+**Типы данных ответа:**
 - `id`: UUID - идентификатор типа комментария
 - `short_name`: string - краткое название типа комментария
 - `name`: string - полное название типа комментария

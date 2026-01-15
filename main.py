@@ -58,15 +58,6 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-    # da1 = datetime.fromisoformat("2025-12-24T12:44:57.540695+00:00")
-    # da2 = datetime.fromisoformat("2025-12-23T12:44:57.540695+00:00")
-    # print(da1)
-    # dat1 =  da1.date()
-    # print(da2)
-    # dat2 =  da2.date()
-    # print(dat1 < dat2)
-    # mini = min(dat1, dat2)
-    # print(f"miniii {mini}")
-    

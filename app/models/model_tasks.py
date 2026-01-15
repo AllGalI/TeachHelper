@@ -8,7 +8,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 # Можно сделать так, чтобы учитель сам заполнял критерии, можно сделать так, чтобы критерии были из ЕГЭ
 class Criterions(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
-
     exercise_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(), nullable=False)
     score: Mapped[int] = mapped_column(Integer(), nullable=False)
@@ -20,6 +19,7 @@ class Exercises(Base):
     name: Mapped[str] = mapped_column(String(), nullable=False)
     description: Mapped[str] = mapped_column(String())
     order_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    files: Mapped[list[str]] = mapped_column(ARRAY(String), nullable=False, default=[])
 
     criterions: Mapped[list["Criterions"]] = relationship(
         "Criterions",
@@ -28,7 +28,8 @@ class Exercises(Base):
         passive_deletes=True,
     )
 
-    file_keys: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=True)
+
+
 
 class Tasks(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
@@ -36,8 +37,7 @@ class Tasks(Base):
     teacher_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(), nullable=False)
     description: Mapped[str] = mapped_column(String())
-    deadline: Mapped[datetime] = mapped_column(DateTime, nullable=True)
-    image_keys: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=True)
+    deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         UniqueConstraint('name', 'subject_id', 'teacher_id', name='_name_subject_teacher_uc'),

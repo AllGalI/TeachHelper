@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.models.model_works import StatusWork
 from app.schemas.schema_comment import CommentRead
-from app.schemas.schema_tasks import SchemaTask
+from app.schemas.schema_tasks import TaskRead
 from app.services.schema_base import BaseModelConfig
 
 
@@ -71,7 +71,7 @@ class WorkRead(WorkBase):
     }
 
 class DetailWorkTeacher(BaseModelConfig):
-    task: SchemaTask
+    task: TaskRead
     work: WorkRead
 
 class WorkUpdate(WorkRead):

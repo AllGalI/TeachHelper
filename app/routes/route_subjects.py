@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_async_session
 from app.models.model_users import Users
+from app.schemas.schema_subjects import SubjectRead
 from app.services.service_subjects import ServiceSubjects
 from app.utils.oAuth import get_current_user
 
@@ -20,7 +21,7 @@ async def create(
     service = ServiceSubjects(session)
     return await service.create(name=name, user=user)
 
-@router.get("")
+@router.get("", response_model=list[SubjectRead])
 async def get_all(
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user)
