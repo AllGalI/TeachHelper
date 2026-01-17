@@ -76,9 +76,6 @@ async def update(
     return await service.update(id, status, conclusion, user)
 
 
-# router = APIRouter(prefix="/works/{work_id}", tags=["Works"])
-
-# @router.post("/ai_verification")
 @router.post("/{work_id}/ai_verification")
 async def send_work_to_verification(
     work_id: uuid.UUID,

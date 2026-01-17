@@ -1,4 +1,3 @@
-import uuid
 
 from pydantic import BaseModel
 
@@ -9,6 +8,7 @@ class UploadFileResponse(BaseModel):
 class IFile(BaseModel):
   key: str
   file: str
+  type: str = 'permanent'
 
 
 def compare_lists(old_list, new_list):

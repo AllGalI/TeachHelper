@@ -105,8 +105,6 @@ class TaskUpdate(BaseModelConfig):
     deadline:   datetime|None = None
     subject_id: uuid.UUID
     teacher_id: uuid.UUID
-    updated_at: datetime|None = None
-    created_at: datetime|None = None
     exercises:   list[ExerciseUpdate]
 
 

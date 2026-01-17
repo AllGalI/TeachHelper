@@ -50,26 +50,26 @@ async def get(
     service = ServiceTasks(session)
     return await service.get(id, teacher)
 
-# @router.post("/{task_id}/start")
-# async def create_works(
-#     task_id: uuid.UUID,
-#     students_ids: list[uuid.UUID],
-#     classrooms_ids: list[uuid.UUID],
-#     session: AsyncSession = Depends(get_async_session),
-#     teacher: Users = Depends(get_current_user)
-# ):
-#     service = ServiceWork(session)
-#     return await service.create_works(task_id, teacher, students_ids, classrooms_ids)
+@router.post("/{id}/start")
+async def create_works(
+    id: uuid.UUID,
+    students_ids: list[uuid.UUID],
+    classrooms_ids: list[uuid.UUID] | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    teacher: Users = Depends(get_current_user)
+):
+    service = ServiceWork(session)
+    return await service.create_works(id, teacher, students_ids, classrooms_ids)
 
 @router.put("/{id}", response_model=TaskRead)
 async def update(
     id: uuid.UUID,
-    update_data: TaskUpdate,
+    data: TaskUpdate,
     session: AsyncSession = Depends(get_async_session),
     teacher: Users = Depends(get_current_user)
 ):
     service = ServiceTasks(session)
-    return await service.update(id, update_data, teacher)
+    return await service.update(id, data, teacher)
 
 
 @router.delete("/{id}")

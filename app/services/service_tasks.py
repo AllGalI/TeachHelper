@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import HTTPException, status, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import  joinedload, selectinload, Load
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -224,7 +224,8 @@ class ServiceTasks(ServiceBase):
                     logger.warning(f"Failed to delete files from S3: {s3_exc}")
 
             # Удаляем задачу из БД (каскадно удалятся упражнения и критерии)
-            await self.session.delete(task)
+            stmt = (delete(Tasks).where(Tasks.id == id))
+            await self.session.execute(stmt)
             await self.session.commit()
 
             return JSONResponse(

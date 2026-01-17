@@ -21,7 +21,7 @@ class ServiceFiles(ServiceBase):
         try:
             s3_response: UploadFileResponse = await get_upload_link_to_temp(file_name)
             return {
-              "upload_link": s3_response.upload_url,
+              "upload_link": s3_response.upload_link,
               "key": s3_response.key
             }
 

@@ -22,7 +22,7 @@ class RepoTasks():
             .options(
                 selectinload(Tasks.exercises)
                 .selectinload(Exercises.criterions),
-                selectinload(Tasks.exercises).selectinload(Exercises.files)
+                selectinload(Tasks.exercises)
             )
         )
         response = await self.session.execute(stmt)
@@ -30,7 +30,7 @@ class RepoTasks():
 
     async def create_works(
         self,
-        task: TaskRead,
+        task: Tasks,
         students_ids: list[uuid.UUID]
     ):
         stmt = select(Works.student_id).where(Works.task_id == task.id).where(Works.student_id.in_(students_ids))

@@ -88,11 +88,11 @@ class ServiceWork(ServiceBase):
         self,
         task_id: uuid.UUID,
         teacher: Users,
-        students_ids: list[uuid.UUID],
-        classrooms_ids: list[uuid.UUID],
+        students_ids: list[uuid.UUID] | None,
+        classrooms_ids: list[uuid.UUID] | None,
     ):
         try:            
-            if len(students_ids) == 0 and len(classrooms_ids) == 0:
+            if students_ids is None and classrooms_ids  is None:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Add students or classes")
 
             if teacher.role is RoleUser.student:
@@ -104,13 +104,13 @@ class ServiceWork(ServiceBase):
             if task_db is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-            task = TaskRead.model_validate(task_db)
-            if task.teacher_id != teacher.id:
+            # task = TaskRead.model_validate(task_db)
+            if task_db.teacher_id != teacher.id:
                 raise ErrorPermissionDenied()
 
             students_ids = await get_students_from_classrooms(self.session, teacher, students_ids, classrooms_ids)
 
-            await repo.create_works(task, students_ids)
+            await repo.create_works(task_db, students_ids)
             await self.session.commit()
 
             return JSONResponse(

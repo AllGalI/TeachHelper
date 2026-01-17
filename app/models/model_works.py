@@ -31,9 +31,14 @@ class Answers(Base):
     exercise_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="CASCADE"))
     text: Mapped[str] = mapped_column(String, default='')
     general_comment: Mapped[str] = mapped_column(String, default='')
-    file_keys: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=True)
+    files: Mapped[list[str]] = mapped_column(ARRAY(String()),  nullable=False, default=[])
 
-    exercise: Mapped["Exercises"] = relationship("Exercises", backref="answer")
+    exercise: Mapped["Exercises"] = relationship(
+        "Exercises",
+        backref="answer",
+        cascade="all",
+        passive_deletes=True
+      )
     work: Mapped["Works"] = relationship("Works", back_populates="answers")
     assessments: Mapped[list["Assessments"]] = relationship(
         "Assessments",

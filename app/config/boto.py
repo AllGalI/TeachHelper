@@ -54,7 +54,7 @@ async def get_upload_link_to_temp(original_filename: str) -> UploadFileResponse:
     new_filename = f"{file_hash}.{extension.split('/')[1]}" if extension else file_hash
 
     async with get_boto_client() as s3:
-        upload_url = await s3.generate_presigned_url(
+        upload_link = await s3.generate_presigned_url(
             'put_object',
             Params={
                 'Bucket': settings.BUCKET_PERMANENT,
@@ -66,7 +66,7 @@ async def get_upload_link_to_temp(original_filename: str) -> UploadFileResponse:
 
     return UploadFileResponse(
       key=new_filename,
-      upload_url=upload_url,
+      upload_link=upload_link,
     )
 
 async def get_object_photos(file_keys: list[str]):

@@ -28,6 +28,13 @@ class Exercises(Base):
         passive_deletes=True,
     )
 
+    # exercises: Mapped[list["Exercises"]] = relationship(
+    #     "Exercises",
+    #     backref="exercise",
+    #     cascade="all"
+    #     passive_deletes=True,
+    # )
+
 
 
 
