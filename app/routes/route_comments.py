@@ -36,8 +36,6 @@ async def update_comment(
 
 @router.delete("/{comment_id}")
 async def delete_comment(
-    work_id: uuid.UUID,
-    answer_id: uuid.UUID,
     comment_id: uuid.UUID,
     session: AsyncSession = Depends(get_async_session),
     user: Users = Depends(get_current_user)

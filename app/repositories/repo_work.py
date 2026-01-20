@@ -1,8 +1,10 @@
 import uuid
 from fastapi import HTTPException
 from sqlalchemy import case, func, select
+from sqlalchemy.orm import selectinload
 
 from app.models.model_classroom import Classrooms
+from app.models.model_comments import Comments, Coordinates
 from app.models.model_subjects import Subjects
 from app.models.model_tasks import Criterions, Exercises, Tasks
 from app.models.model_users import RoleUser, Users, teachers_students
@@ -283,9 +285,6 @@ class RepoWorks():
             if filters.teachers_ids:
                 stmt = stmt.where(Users.id.in_(filters.teachers_ids))
 
-            if filters.classrooms_ids:
-                stmt = stmt.where(Classrooms.id.in_(filters.classrooms_ids))
-
             if filters.statuses:
                 stmt = stmt.where(Works.status.in_(filters.statuses))
 
@@ -420,10 +419,6 @@ class RepoWorks():
             if filters.teachers_ids:
                 stmt = stmt.where(Tasks.teacher_id.in_(filters.teachers_ids))
 
-            if filters.classrooms_ids:
-                # Используем join для фильтрации по классам
-                stmt = stmt.join(Classrooms, teachers_students.c.classroom_id == Classrooms.id)
-                stmt = stmt.where(Classrooms.id.in_(filters.classrooms_ids))
 
             if filters.statuses:
                 # Преобразуем строки в StatusWork enum
@@ -455,6 +450,33 @@ class RepoWorks():
             result = await self.session.execute(stmt)
             return result.all()
 
+        except Exception as exc:
+            logger.exception(exc)
+            await self.session.rollback()
+            raise HTTPException(status_code=500, detail="Internal Server Error")
+
+    async def get(self, work_id: uuid.UUID) -> Works | None:
+        """Получение работы с полными связями (answers, assessments, comments, task, exercise)"""
+        try:
+            stmt = (
+                select(Works)
+                .where(Works.id == work_id)
+                .options(
+                    selectinload(Works.answers)
+                    .selectinload(Answers.assessments)
+                    .selectinload(Assessments.criterion),
+                    selectinload(Works.answers)
+                    .selectinload(Answers.comments)
+                    .selectinload(Comments.coordinates),
+                    selectinload(Works.answers)
+                    .selectinload(Answers.exercise),
+                    selectinload(Works.task)
+                    .selectinload(Tasks.exercises)
+                    .selectinload(Exercises.criterions)
+                )
+            )
+            result = await self.session.execute(stmt)
+            return result.scalars().first()
         except Exception as exc:
             logger.exception(exc)
             await self.session.rollback()

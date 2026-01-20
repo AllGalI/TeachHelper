@@ -12,7 +12,7 @@ class SchemaStudentPerfomansWorks(BaseModel):
     status: StatusWork
     total_score: int
     task_title: str
-    max_score: int
+    score: int
 
 class SchemaStudentPerformans(BaseModel):
     student_id: uuid.UUID

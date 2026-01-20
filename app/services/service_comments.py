@@ -7,7 +7,9 @@ from app.exceptions.responses import *
 from app.models.model_comments import Comments, Coordinates
 from app.models.model_users import RoleUser, Users
 from app.models.model_works import Answers, Works
-from app.schemas.schema_comment import AICommentDTO, CommentUpdate
+from app.schemas.schema_comment import AICommentDTO, CommentCreate, CommentUpdate
+from app.schemas.schema_files import compare_lists
+from app.config.boto import delete_files_from_s3
 from app.utils.logger import logger
 from app.services.service_base import ServiceBase
 
@@ -31,7 +33,7 @@ class ServiceComments(ServiceBase):
             for comment in comments:
                 comment_orm = Comments(
                     answer_id=comment.answer_id,
-                    answer_file_id=comment.image_file_id,
+                    answer_file_key=comment.answer_file_key,
                     description=comment.description,
                     type_id=comment.type_id,
                     human=False,
@@ -64,7 +66,7 @@ class ServiceComments(ServiceBase):
 
     async def create(
         self,
-        comment: AICommentDTO,
+        comment: CommentCreate,
         user: Users,
     ):
         try:
@@ -76,12 +78,20 @@ class ServiceComments(ServiceBase):
 
             comment_orm = Comments(
                 answer_id=comment.answer_id,
-                answer_file_id=comment.image_file_id,
+                answer_file_key=comment.answer_file_key,
                 description=comment.description,
                 type_id=comment.type_id,
                 human=True,
+                files=comment.files
             )
-            comment_orm.coordinates.extend(comment.coordinates)
+
+            comment_orm.coordinates.extend(
+              Coordinates(
+                x1=coordinate.x1,
+                y1=coordinate.y1,
+                x2=coordinate.x2,
+                y2=coordinate.y2,
+              ) for coordinate in comment.coordinates)
 
             self.session.add(comment_orm)
             await self.session.commit()
@@ -96,6 +106,14 @@ class ServiceComments(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
     async def update(self, comment_id: uuid.UUID, update_data: CommentUpdate, user: Users):
+        """
+        Обновление комментария с обработкой файлов.
+        
+        При обновлении файлов:
+        1. Сравнивается старый и новый список файлов
+        2. Удаленные файлы автоматически удаляются из S3
+        3. Обновляется список файлов в базе данных
+        """
         try:
             if user.role is RoleUser.student:
                 raise ErrorRolePermissionDenied(RoleUser.teacher, RoleUser.student)
@@ -104,10 +122,29 @@ class ServiceComments(ServiceBase):
             if comment_db is None:
                 raise ErrorNotExists(Comments)
 
-            update_payload = update_data.model_dump(exclude_unset=True)  # обновляем только переданные поля, остальное не трогаем
+            # Обрабатываем файлы отдельно, если они переданы
+            files_to_delete = []
+            if update_data.files is not None:
+                # Сравниваем старый и новый список файлов
+                old_files = comment_db.files if comment_db.files else []
+                file_changes = compare_lists(old_files, update_data.files)
+                files_to_delete = file_changes['removed']
+                # Обновляем список файлов
+                comment_db.files = update_data.files
+
+            # Обновляем остальные поля (type_id, description)
+            update_payload = update_data.model_dump(exclude_unset=True, exclude={'files'})  # исключаем files, т.к. уже обработали
             for key, value in update_payload.items():
                 if hasattr(comment_db, key):
                     setattr(comment_db, key, value)
+
+            # Удаляем файлы из S3, если есть удаленные
+            if files_to_delete:
+                try:
+                    await delete_files_from_s3(files_to_delete)
+                except Exception as s3_exc:
+                    # Логируем ошибку, но продолжаем обновление комментария
+                    logger.warning(f"Failed to delete files from S3: {s3_exc}")
 
             await self.session.commit()
             return JSONResponse(

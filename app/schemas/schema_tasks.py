@@ -1,9 +1,11 @@
-import asyncio
 from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 from app.services.schema_base import BaseModelConfig
-from app.schemas.schema_files import IFile
+
+if TYPE_CHECKING:
+    from app.schemas.schema_files import IFile
 
 class TasksListItem(BaseModel):
     id: uuid.UUID
@@ -124,7 +126,7 @@ class ExerciseRead(BaseModelConfig):
     order_index: int            
     task_id:     uuid.UUID
     criterions:  list[CriterionUpdate]
-    files:       list[IFile]
+    files:       list["IFile"]
 
 
 
@@ -161,3 +163,13 @@ __all__ = [
     "ExerciseRead",
     "TaskRead"
 ]
+
+
+# Вызов model_rebuild() для разрешения forward references
+def _rebuild_models():
+    """Пересборка моделей для разрешения строковых аннотаций"""
+    from app.schemas.schema_files import IFile
+    
+    ExerciseRead.model_rebuild()
+
+_rebuild_models()

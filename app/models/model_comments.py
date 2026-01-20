@@ -22,7 +22,7 @@ class Comments(Base):
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
     type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("comment_types.id"), nullable=False)
     human: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    files: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=True)
+    files: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=False, default=[])
 
     coordinates: Mapped[list["Coordinates"]] = relationship(
         "Coordinates",

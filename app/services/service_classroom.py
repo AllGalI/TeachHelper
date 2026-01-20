@@ -108,7 +108,7 @@ class ServiceClassroom(ServiceBase):
     #                 "status": row["status"],
     #                 "total_score": row["total_score"],
     #                 "task_title": row["task_title"],
-    #                 "max_score": row["max_score"]
+    #                 "score": row["score"]
     #             })
 
     #     return students.values()

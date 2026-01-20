@@ -33,12 +33,8 @@ class Answers(Base):
     general_comment: Mapped[str] = mapped_column(String, default='')
     files: Mapped[list[str]] = mapped_column(ARRAY(String()),  nullable=False, default=[])
 
-    exercise: Mapped["Exercises"] = relationship(
-        "Exercises",
-        backref="answer",
-        cascade="all",
-        passive_deletes=True
-      )
+    exercise: Mapped["Exercises"] = relationship("Exercises", backref="answer")
+
     work: Mapped["Works"] = relationship("Works", back_populates="answers")
     assessments: Mapped[list["Assessments"]] = relationship(
         "Assessments",
@@ -61,7 +57,7 @@ class Works(Base):
     student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     finish_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     status: Mapped[StatusWork] = mapped_column(Enum(StatusWork), default=StatusWork.draft, nullable=False)
-    сonclusion: Mapped[str] = mapped_column(String, nullable=True)
+    conclusion: Mapped[str] = mapped_column(String, nullable=True)
     ai_verificated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     answers: Mapped[list["Answers"]] = relationship(

@@ -122,7 +122,6 @@ class ServiceTasks(ServiceBase):
 
     async def update(self, id: uuid.UUID, update_data: TaskUpdate, teacher: Users) -> TaskRead:
         try:
-            print(teacher.__dict__)
             if teacher.role is RoleUser.student:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
 

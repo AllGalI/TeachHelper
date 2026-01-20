@@ -8,13 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions.responses import ErrorNotExists, ErrorPermissionDenied, ErrorRolePermissionDenied, Success
 from app.models.model_comments import Comments
-from app.models.model_tasks import Exercises, Tasks
+from app.models.model_tasks import Tasks
 from app.models.model_users import  RoleUser, Users, teachers_students
-from app.models.model_works import Answers, StatusWork, Works
+from app.models.model_works import Assessments, Answers, StatusWork, Works
 from app.repositories.repo_task import RepoTasks
-from app.schemas.schema_tasks import TaskRead
-from app.schemas.schema_work import  DetailWorkTeacher, SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkEasyRead, WorkRead
+from app.schemas.schema_comment import CommentRead, Coordinates as CoordinatesSchema
+from app.schemas.schema_files import IFile, compare_lists
+from app.schemas.schema_work import AnswerUpdate, CriterionRead, ExerciseRead, TaskRead
+from app.config.boto import delete_files_from_s3, get_presigned_url
 from app.config.rabbit import WorkRequestDTO, channel
+from app.schemas.schema_work import AnswerRead, AssessmentRead, SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkEasyRead, WorkRead, WorkUpdate, WorksFilterResponseStudent, WorksFilterResponseTeacher
 from app.utils.logger import logger
 from app.transformers.transformer_work import TransformerWorks
 
@@ -23,7 +26,7 @@ from app.services.service_base import ServiceBase
 
 class ServiceWork(ServiceBase):
 
-    async def get_smart_filters_teacher(self, user: Users, filters: SmartFiltersWorkTeacher):
+    async def get_smart_filters_teacher(self, user: Users, filters: SmartFiltersWorkTeacher) -> WorksFilterResponseTeacher:
         repo = RepoWorks(self.session)
         if user.role is RoleUser.student:
             raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
@@ -32,7 +35,7 @@ class ServiceWork(ServiceBase):
         return TransformerWorks.handle_filters_response(user, rows)
 
 
-    async def get_smart_filters_student(self, user: Users, filters: SmartFiltersWorkStudent):
+    async def get_smart_filters_student(self, user: Users, filters: SmartFiltersWorkStudent)-> WorksFilterResponseStudent:
         repo = RepoWorks(self.session)
         if user.role is RoleUser.teacher:
             raise ErrorRolePermissionDenied(RoleUser.student, user.role)
@@ -82,7 +85,6 @@ class ServiceWork(ServiceBase):
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    # async def get_works(self, user: Users, filters: SmartFiltersWorkTeacher)
 
     async def create_works(
         self,
@@ -104,7 +106,6 @@ class ServiceWork(ServiceBase):
             if task_db is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-            # task = TaskRead.model_validate(task_db)
             if task_db.teacher_id != teacher.id:
                 raise ErrorPermissionDenied()
 
@@ -127,146 +128,67 @@ class ServiceWork(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")  
 
 
-    async def get(self, id: uuid.UUID):
+    async def get(self, work_id: uuid.UUID, user: Users) -> WorkRead:
+        """Получение работы с проверкой прав доступа"""
         try:
-            stmt = (
-                select(Works)
-                .where(Works.id == id)
-                .options(
-                    selectinload(Works.answers)
-                    .selectinload(Answers.assessments),
-                    selectinload(Works.answers)
-                    .selectinload(Answers.files),
-                    selectinload(Works.answers)
-                    .selectinload(Answers.comments)
-                    .selectinload(Comments.files)
-                )
-            )
-            response = await self.session.execute(stmt)
-            work_db = response.scalars().first()
+            repo = RepoWorks(self.session)
+            work_db = await repo.get(work_id)
             
             if work_db is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Work not exists")
-     
-            stmt = (
-                select(Tasks)
-                .where(Tasks.id == work_db.task_id)
-                .options(
-                    selectinload(Tasks.exercises)
-                    .selectinload(Exercises.criterions)
-                )
-            )
-            response = await self.session.execute(stmt) 
-            task_db = response.scalars().first()
-
-            return JSONResponse(
-                content=DetailWorkTeacher(
-                    task=SchemaTask.model_validate(task_db),
-                    work=WorkRead.model_validate(work_db)
-                ).model_dump(mode="json"),
-                status_code=status.HTTP_200_OK
-            )
-
-        except HTTPException as exc:
+                raise ErrorNotExists(Works)
+            
+            # Проверка прав доступа: студент может видеть только свои работы, учитель - работы своих студентов
+            if user.role is RoleUser.student:
+                if work_db.student_id != user.id:
+                    raise ErrorPermissionDenied()
+            elif user.role is RoleUser.teacher:
+                # Учитель может видеть только работы по своим задачам
+                if work_db.task.teacher_id != user.id:
+                    raise ErrorPermissionDenied()
+            
+            # Преобразуем ORM в схему
+            work_read = await orm_to_work_read(work_db)
+            return work_read
+            
+        except HTTPException:
             raise
-
         except Exception as exc:
             logger.exception(exc)
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
-    async def update(
-        self,
-        work_id: uuid.UUID,
-        status: StatusWork,
-        conclusion: str | None,
-        user: Users
-    ):
+    async def update(self, work_id: uuid.UUID, update_data: WorkUpdate, user: Users) -> WorkRead:
+        """Обновление работы с проверкой прав доступа и ограничений по полям"""
         try:
-            # Получаем работу с загрузкой связанной задачи (для проверки teacher_id)
-            work_db = await self.session.get(
-                Works,
-                work_id,
-                options=[selectinload(Works.task)]
-            )
+            repo = RepoWorks(self.session)
+            work_db = await repo.get(work_id)
             
-            if not work_db:
+            if work_db is None:
                 raise ErrorNotExists(Works)
             
-            # Словарь приоритетов статусов
-            work_status_weight = {
-                "draft": 0,
-                "inProgress": 1,
-                "verification": 2,
-                "verificated": 3,
-                "canceled": 4,
-            }
+            # Проверка прав доступа
+            if user.role is RoleUser.student:
+                if work_db.student_id != user.id:
+                    raise ErrorPermissionDenied()
+            elif user.role is RoleUser.teacher:
+                if work_db.task.teacher_id != user.id:
+                    raise ErrorPermissionDenied()
+
+            # Применяем изменения с учетом прав доступа
+            await apply_work_updates(work_db, update_data, user)
+            # Явно добавляем объект в сессию для отслеживания изменений
+            # Это гарантирует, что SQLAlchemy отследит все изменения
             
-            current_weight = work_status_weight[work_db.status.value]
-            new_weight = work_status_weight[status.value]
-            
-
-            # Проверка: статус можно только повышать (или оставлять текущий)
-            if new_weight < current_weight:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Status can only be increased or kept the same, not decreased"
-                )
-
-            if user.role == RoleUser.student:
-                # Ученик может:
-                # - переводить из draft → inProgress
-                # - переводить из inProgress → verification
-                # - НЕ может устанавливать conclusion
-                if current_weight > 1:
-                    raise HTTPException(
-                        status_code=403,
-                        detail="Student cannot update work with status beyond 'inProgress'"
-                    )
-                
-                if new_weight not in (1, 2):  # только inProgress или verification
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Student can only set status to 'inProgress' or 'verification'"
-                    )
-                    
-                if conclusion is not None:
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Student cannot set conclusion"
-                    )
-
-            elif user.role == RoleUser.teacher:
-                # Учитель может:
-                # - переводить из verification → verificated
-                # - переводить в canceled из любого статуса
-                # - устанавливать conclusion
-                if (new_weight == 3 and current_weight != 2):  # verificated только после verification
-                    raise HTTPException(
-                        status_code=400,
-                        detail="Teacher can set 'verificated' only after 'verification'"
-                    )
-                    
-                if new_weight == 4:  # canceled можно из любого статуса
-                    pass  # разрешено
-
-            else:
-                raise HTTPException(status_code=403, detail="Unauthorized role")
-
-            # Применяем изменения
-            work_db.status = status
-            if conclusion is not None:
-                work_db.conclusion = conclusion
-
-
             await self.session.commit()
-            return Success()
-
+            
+            # Получаем обновленную работу
+            work_db = await repo.get(work_id)
+            work_read = await orm_to_work_read(work_db)
+            return work_read
+            
         except HTTPException:
             await self.session.rollback()
             raise
-
         except Exception as exc:
             logger.exception(exc)
             await self.session.rollback()
@@ -289,9 +211,7 @@ class ServiceWork(ServiceBase):
                     Tasks.teacher_id == user.id
                 )
                 .options(
-                    selectinload(Works.answers).load_only(Answers.id),
-                    selectinload(Works.answers)
-                        .selectinload(Answers.files).load_only(Files.id, Files.filename)
+                    selectinload(Works.answers).load_only(Answers.id)
                 )
             )
             
@@ -347,7 +267,7 @@ def rows_to_easy_read(rows):
                 subject=row.subject,
                 task_name=row.task_name,
                 score=score,
-                max_score=row.max_score,
+                max_score=max_score,
                 percent=percent,
                 status_work=row.status
             )
@@ -385,3 +305,312 @@ async def get_students_from_classrooms(
         ids_from_classroom = response.scalars().all()
 
     return ids_from_classroom
+
+
+async def orm_to_assessment_read(assessment_orm: Assessments) -> AssessmentRead:
+    """Преобразование Assessment ORM в AssessmentRead схему"""
+    return AssessmentRead(
+        id=assessment_orm.id,
+        answer_id=assessment_orm.answer_id,
+        criterion_id=assessment_orm.criterion_id,
+        points=assessment_orm.points,
+        criterion=[
+            CriterionRead(
+                id=assessment_orm.criterion.id,
+                name=assessment_orm.criterion.name,
+                score=assessment_orm.criterion.score
+            )
+        ] if assessment_orm.criterion else []
+    )
+
+
+async def orm_to_comment_read(comment_orm: Comments) -> CommentRead:
+    """Преобразование Comment ORM в CommentRead схему"""
+    # Получаем presigned URLs для файлов
+    # В модели Comments поле называется 'files', а не 'file_keys'
+    file_keys = comment_orm.files if comment_orm.files else []
+    files = []
+    if file_keys:
+        for key in file_keys:
+            try:
+                presigned_url = await get_presigned_url(key)
+                files.append(IFile(key=key, file=presigned_url))
+            except Exception as exc:
+                logger.warning(f"Failed to get presigned URL for file {key}: {exc}")
+    
+    # Преобразуем coordinates из ORM объектов в схему Coordinates
+    # coordinates уже загружены через selectinload в репозитории, поэтому lazy load не произойдет
+    coordinates_list = []
+    if hasattr(comment_orm, 'coordinates') and comment_orm.coordinates:
+        for coord_orm in comment_orm.coordinates:
+            coordinates_list.append(
+                CoordinatesSchema(
+                    x1=coord_orm.x1,
+                    y1=coord_orm.y1,
+                    x2=coord_orm.x2,
+                    y2=coord_orm.y2
+                )
+            )
+    
+    return CommentRead(
+        id=comment_orm.id,
+        answer_id=comment_orm.answer_id,
+        answer_file_key=comment_orm.answer_file_key,
+        description=comment_orm.description,
+        type_id=comment_orm.type_id,
+        coordinates=coordinates_list,
+        files=files
+    )
+
+
+async def orm_to_answer_read(answer_orm: Answers) -> AnswerRead:
+    """Преобразование Answer ORM в AnswerRead схему"""
+    import asyncio
+
+    # Получаем presigned URLs для файлов
+    files = []
+    if answer_orm.files:
+        for key in answer_orm.files:
+            try:
+                presigned_url = await get_presigned_url(key)
+                files.append(IFile(key=key, file=presigned_url))
+            except Exception as exc:
+                logger.warning(f"Failed to get presigned URL for file {key}: {exc}")
+    
+    # Преобразуем assessments и comments
+    assessments = [await orm_to_assessment_read(ass) for ass in answer_orm.assessments]
+    comments = [await orm_to_comment_read(comm) for comm in answer_orm.comments]
+    
+    # Преобразуем exercise
+    exercise_files = []
+    if answer_orm.exercise and answer_orm.exercise.files:
+        for key in answer_orm.exercise.files:
+            try:
+                presigned_url = await get_presigned_url(key)
+                exercise_files.append(IFile(key=key, file=presigned_url))
+            except Exception as exc:
+                logger.warning(f"Failed to get presigned URL for file {key}: {exc}")
+    
+    exercise_read = None
+    if answer_orm.exercise:
+        exercise_read = ExerciseRead(
+            id=answer_orm.exercise.id,
+            task_id=answer_orm.exercise.task_id,
+            name=answer_orm.exercise.name,
+            description=answer_orm.exercise.description,
+            order_index=answer_orm.exercise.order_index,
+            files=exercise_files
+        )
+    
+    return AnswerRead(
+        id=answer_orm.id,
+        work_id=answer_orm.work_id,
+        exercise_id=answer_orm.exercise_id,
+        text=answer_orm.text,
+        general_comment=answer_orm.general_comment,
+        files=files,
+        exercise=exercise_read,
+        assessments=assessments,
+        comments=comments
+    )
+
+
+async def orm_to_task_read_for_work(task_orm: Tasks) -> TaskRead:
+    """Преобразование Task ORM в TaskRead схему для работы"""
+    return TaskRead(
+        id=task_orm.id,
+        name=task_orm.name,
+        description=task_orm.description,
+        deadline=str(task_orm.deadline) if task_orm.deadline else None,
+        subject_id=task_orm.subject_id  # Добавляем subject_id из модели Tasks
+    )
+
+
+async def orm_to_work_read(work_orm: Works) -> WorkRead:
+    """Преобразование Work ORM в WorkRead схему"""
+    import asyncio
+    
+    # Асинхронно преобразуем все ответы
+    answers = await asyncio.gather(
+        *[orm_to_answer_read(answer) for answer in work_orm.answers]
+    )
+    
+    # Преобразуем задачу
+    task_read = await orm_to_task_read_for_work(work_orm.task)
+    
+    return WorkRead(
+        id=work_orm.id,
+        task_id=work_orm.task_id,
+        student_id=work_orm.student_id,
+        finish_date=work_orm.finish_date,
+        status=work_orm.status,
+        conclusion=work_orm.conclusion or "",
+        ai_verificated=work_orm.ai_verificated,
+        task=task_read,
+        answers=answers
+    )
+
+
+async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: Users):
+    """Применение обновлений к работе с проверкой прав доступа"""
+    # Определяем статусы в порядке возрастания
+    status_order = {
+        StatusWork.draft: 0,
+        StatusWork.inProgress: 1,
+        StatusWork.verification: 2,
+        StatusWork.verificated: 3,
+        StatusWork.canceled: 4
+    }
+    
+    if user.role is RoleUser.student:
+        # Студент может изменять:
+        # - answers.text
+        # - answers.files
+        # - status (только draft -> inProgress -> verification, нельзя уменьшать)
+        
+        # Проверка статуса
+        if update_data.status != work_db.status:
+            # Студент не может обновлять работу со статусом verification или выше
+            if work_db.status in [StatusWork.verification, StatusWork.verificated]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Student cannot update work with status beyond 'inProgress'"
+                )
+            
+            # Студент может устанавливать только inProgress или verification
+            if update_data.status not in [StatusWork.inProgress, StatusWork.verification]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Student can only set status to 'inProgress' or 'verification'"
+                )
+            
+            # Нельзя уменьшать статус
+            if status_order[update_data.status] < status_order[work_db.status]:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Status can only be increased or kept the same, not decreased"
+                )
+            
+            work_db.status = update_data.status
+        
+        # Проверка conclusion - студент не может устанавливать
+        if update_data.conclusion and update_data.conclusion != work_db.conclusion:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Student cannot set conclusion"
+            )
+        
+        
+        # Обновляем answers (только text и files)
+        await update_answers_for_student(work_db, update_data.answers)
+        
+    elif user.role is RoleUser.teacher:
+        # Учитель может изменять:
+        # - answers.general_comment
+        # - assessments.points
+        # - status (любые, но verificated только после verification)
+        # - conclusion
+
+
+        # Проверка статуса verificated
+        if update_data.status == StatusWork.verificated and work_db.status != StatusWork.verification:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Teacher can set 'verificated' only after 'verification'"
+            )
+
+        # Проверка finish_date - учитель не может изменять напрямую
+        if update_data.finish_date and update_data.finish_date != work_db.finish_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Student cannot set finish_date directly"
+            )
+        
+        # Обновляем статус только если он изменился
+        if update_data.status != work_db.status:
+            work_db.status = update_data.status
+        
+        # Обновляем conclusion - проверяем явно на None, чтобы можно было установить пустую строку
+        if update_data.conclusion is not None:
+            work_db.conclusion = update_data.conclusion
+        
+        # Обновляем finish_date из update_data, если он указан (учитель может изменять)
+        if update_data.finish_date is not None:
+            work_db.finish_date = update_data.finish_date
+        # Или устанавливаем автоматически, если статус изменился на verification или verificated
+        elif update_data.status in [StatusWork.verification, StatusWork.verificated] and not work_db.finish_date:
+            from datetime import datetime
+            work_db.finish_date = datetime.utcnow()
+        
+        # Обновляем answers (general_comment и assessments)
+        await update_answers_for_teacher(work_db, update_data.answers)
+
+
+async def update_answers_for_student(work_db: Works, answers_update: list[AnswerUpdate]):
+    """Обновление ответов студентом (только text и files)"""
+    files_to_delete = []
+    
+    # Создаем словарь существующих ответов по ID
+    existing_answers = {answer.id: answer for answer in work_db.answers}
+
+    for answer_update in answers_update:
+        answer_id = answer_update.id
+        # Обновляем только существующие ответы (студент не может создавать новые)
+        if answer_id and answer_id in existing_answers:
+            answer_db = existing_answers[answer_id]
+            
+            # Обновляем только text и files
+            answer_db.text = answer_update.text
+            
+            # Обрабатываем файлы: преобразуем list[IFile] в list[str] (ключи)
+            if answer_db.files != answer_update.files:
+                file_changes = compare_lists(answer_db.files, answer_update.files)
+                files_to_delete.extend(file_changes['removed'])
+                answer_db.files = answer_update.files
+    
+    # Удаляем файлы из S3
+    if files_to_delete:
+        await delete_files_from_s3(files_to_delete)
+
+
+async def update_answers_for_teacher(work_db: Works, answers_update: list[AnswerUpdate]):
+    """Обновление ответов учителем (general_comment и assessments)"""
+    # Создаем словарь существующих ответов по ID
+    existing_answers = {answer.id: answer for answer in work_db.answers}
+    
+    for answer_update in answers_update:
+        answer_id = answer_update.id
+        # Обновляем только существующие ответы (учитель не может создавать новые)
+        if answer_id and answer_id in existing_answers:
+            answer_db = existing_answers[answer_id]
+            
+            # Обновляем general_comment
+            answer_db.general_comment = answer_update.general_comment
+            
+            # Обновляем assessments
+            if answer_update.assessments:
+                # Создаем словари существующих оценок по id и criterion_id
+                existing_assessments_by_id = {
+                    ass.id: ass for ass in answer_db.assessments
+                }
+                existing_assessments_by_criterion = {
+                    ass.criterion_id: ass for ass in answer_db.assessments
+                }
+                
+                for assessment_update in answer_update.assessments:
+                    # Если есть id, обновляем по id
+                    if assessment_update.id and assessment_update.id in existing_assessments_by_id:
+                        existing_assessments_by_id[assessment_update.id].points = assessment_update.points
+                    # Иначе, если есть criterion_id, обновляем или создаем по criterion_id
+                    elif assessment_update.criterion_id:
+                        if assessment_update.criterion_id in existing_assessments_by_criterion:
+                            # Обновляем существующую оценку
+                            existing_assessments_by_criterion[assessment_update.criterion_id].points = assessment_update.points
+                        else:
+                            # Создаем новую оценку
+                            new_assessment = Assessments(
+                                answer_id=answer_db.id,
+                                criterion_id=assessment_update.criterion_id,
+                                points=assessment_update.points
+                            )
+                            answer_db.assessments.append(new_assessment)
