@@ -10,9 +10,8 @@ from app.repositories.teacher.repo_students import RepoStudents
 
 from app.exceptions.responses import ErrorRolePermissionDenied
 from app.schemas.schema_students import (
-    ClassroomRead, 
-    StudentRead, 
-    UsersPageSchema,
+    FilterStudents,
+    StudentsPageResponse, 
     StudentsReadSchemaTeacher,
     StudentFilterItem,
     ClassroomFilterItem
@@ -24,20 +23,24 @@ from app.services.service_base import ServiceBase
 
 class ServiceStudents(ServiceBase):
 
-    async def get_all(self, user: Users):
-        if user.role != RoleUser.teacher:
+    async def get_all(self, filters: FilterStudents | None, teacher: Users):
+        if teacher.role != RoleUser.teacher:
             raise ErrorRolePermissionDenied(RoleUser.teacher)
 
+
         students_repo = RepoStudents(self.session)
-        students = await students_repo.get_all(user)
+
+        students = await students_repo.get_single_students(filters, teacher)
 
         classrooms_repo = RepoClassroom(self.session)
-        classrooms = await classrooms_repo.get_teacher_classrooms(user.id)
 
-        return UsersPageSchema(
-           students=[StudentRead.model_validate(student) for student in students],
-           classrooms=[ClassroomRead.model_validate(classroom) for classroom in classrooms]
+        classrooms = await classrooms_repo.get_teacher_classrooms(filters, teacher.id)
+
+        return StudentsPageResponse(
+          classrooms=classrooms,
+          single_students=students
         )
+
 
 
     async def get_performans_data(self, student_id: uuid.UUID, user: Users):
@@ -64,11 +67,7 @@ class ServiceStudents(ServiceBase):
                 raise ErrorRolePermissionDenied(RoleUser.teacher)
             
             repo = RepoStudents(self.session)
-            if not await repo.exists(user.id, student_id):
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Студент не найден"
-                )
+
             if await repo.user_exists_in_class(user.id, student_id, classroom_id):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

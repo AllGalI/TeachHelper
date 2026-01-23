@@ -16,18 +16,18 @@ router = APIRouter(prefix="/classrooms", tags=["Classroom"])
 async def create_classroom(
     name: str,
     session: AsyncSession = Depends(get_async_session),
-    current_user: Users = Depends(get_current_user)
+    user: Users = Depends(get_current_user)
 ):
     service = ServiceClassroom(session)
-    return await service.create(name, current_user)
+    return await service.create(name, user)
 
 @router.get("", response_model=list[SchemaClassroom])
 async def get_all(
     session: AsyncSession = Depends(get_async_session),
-    current_user: Users = Depends(get_current_user)
+    user: Users = Depends(get_current_user)
 ):
     service = ServiceClassroom(session)
-    return await service.get_all(current_user)
+    return await service.get_all(user)
 
 
 @router.patch('/{id}')
@@ -35,7 +35,7 @@ async def update(
     id: uuid.UUID,
     name: str,
     session: AsyncSession = Depends(get_async_session),
-    current_user: Users = Depends(get_current_user)
+    user: Users = Depends(get_current_user)
 ):
     service = ServiceClassroom(session)
     return await service.update(id, name)
@@ -44,11 +44,12 @@ async def update(
 @router.delete('/{id}')
 async def delete(
     id: uuid.UUID,
+    delete_students: bool = False,
     session: AsyncSession = Depends(get_async_session),
-    current_user: Users = Depends(get_current_user)
+    user: Users = Depends(get_current_user)
 ):
     service = ServiceClassroom(session)
-    return await service.delete(id)
+    return await service.delete(id, delete_students, user)
     
 # @router.get('/{id}')
 # async def get(

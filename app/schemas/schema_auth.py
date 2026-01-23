@@ -3,7 +3,7 @@ import uuid
 from pydantic import BaseModel, EmailStr
 
 from app.models.model_users import RoleUser
-from app.services.schema_base import BaseModelConfig
+from app.schemas.schema_base import BaseModelConfig
 
 class UserRegRole(str, Enum):
     teacher = "teacher"

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import TYPE_CHECKING
 
 from app.models.model_comments import Coordinates
-from app.services.schema_base import BaseModelConfig
+from app.schemas.schema_base import BaseModelConfig
 
 if TYPE_CHECKING:
     from app.schemas.schema_files import IFile

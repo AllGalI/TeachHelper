@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordRequestForm
 from app.db import get_async_session
 from app.models.model_users import Users
-from app.schemas.schema_auth import ConfirmReset, EmailBodyDTO, CodeDTO, UserRegister, UserRead, UserToken, UserResetPassword
-from app.schemas.schema_students import UsersPageSchema
+from app.schemas.schema_auth import ConfirmReset, EmailBodyDTO, CodeDTO, UserRegister, UserRead, UserResetPassword
 from app.services.service_auth import ServiceAuth
 from app.utils.oAuth import get_current_user
 

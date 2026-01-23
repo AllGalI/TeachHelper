@@ -7,7 +7,7 @@ from app.exceptions.responses import ErrorNotExists, ErrorRolePermissionDenied, 
 from app.models.model_comments import CommentTypes
 from app.models.model_subjects import Subjects
 from app.models.model_users import RoleUser, Users
-from app.services.schema_base import BaseModelConfig
+from app.schemas.schema_base import BaseModelConfig
 from app.services.service_base import ServiceBase
 
 

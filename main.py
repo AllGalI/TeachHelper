@@ -1,13 +1,11 @@
-from datetime import datetime
-import json
-import uuid
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from app.config.config_app import settings
 
 
+from app.models.model_users import RoleUser, Users
+from app.repositories.teacher.repo_students import RepoStudents
 from app.routes.route_answers import router as router_answers
 from app.routes.route_assessments import router as router_assessments
 from app.routes.route_auth import router as router_auth
@@ -21,6 +19,7 @@ from app.routes.route_subjects import router as router_subjects
 from app.routes.route_tasks import router as router_tasks
 from app.routes.route_works import router as router_works
 from app.routes.route_comment_type import router as router_comment_types
+from app.routes.route_journal import router as router_journal
 
 
 def create_app() -> FastAPI:
@@ -51,6 +50,7 @@ def create_app() -> FastAPI:
     app.include_router(router_comment_types)
     app.include_router(router_tasks)
     app.include_router(router_works)
+    app.include_router(router_journal)
 
 
     return app

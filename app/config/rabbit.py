@@ -3,7 +3,7 @@ import pika
 import uuid
 from dotenv import load_dotenv
 
-from app.services.schema_base import BaseModelConfig
+from app.schemas.schema_base import BaseModelConfig
 
 load_dotenv()
 

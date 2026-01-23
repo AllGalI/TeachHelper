@@ -1,24 +1,26 @@
 import os
+from typing import Annotated
 import uuid
 from fastapi import APIRouter, Depends
 
 from app.config.config_app import settings
 from app.db import get_async_session
 from app.models.model_users import Users
-from app.schemas.schema_students import UsersPageSchema, StudentsReadSchemaTeacher
+from app.schemas.schema_students import FilterStudents, StudentsPageResponse, StudentsReadSchemaTeacher
 from app.services.teacher.service_students import ServiceStudents
 from app.utils.oAuth import get_current_user
 from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter(prefix='/students', tags=["Students"])
 
-@router.get("", response_model=UsersPageSchema)
+@router.get("", response_model=StudentsPageResponse)
 async def get_all(
+    filters: Annotated[FilterStudents, Depends()],
     session: AsyncSession = Depends(get_async_session),
-    current_user: Users = Depends(get_current_user)
+    teacher: Users = Depends(get_current_user)
     ):
     service = ServiceStudents(session)
-    return await service.get_all(current_user)
+    return await service.get_all(filters, teacher)
 
 
 @router.get("/filters", response_model=StudentsReadSchemaTeacher)

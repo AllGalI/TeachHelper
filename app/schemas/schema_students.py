@@ -1,40 +1,32 @@
-from typing import Optional
+from datetime import date
+import string
 import uuid
+from fastapi import Query
 from pydantic import BaseModel
 
 from app.models.model_works import StatusWork
-from app.services.schema_base import BaseModelConfig
-
-
-
-class SchemaStudentPerfomansWorks(BaseModel):
-    submission_id: uuid.UUID
-    status: StatusWork
-    total_score: int
-    task_title: str
-    score: int
-
-class SchemaStudentPerformans(BaseModel):
-    student_id: uuid.UUID
-    student_name: str
-    verificated_works_count: int
-    avg_score: int
-    works: list[SchemaStudentPerfomansWorks]
-
+from app.schemas.schema_base import BaseModelConfig
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict
 
 
 class StudentRead(BaseModelConfig):
     id: uuid.UUID
     name: str
-    classroom: Optional[uuid.UUID] = None
 
 class ClassroomRead(BaseModelConfig):
     id: uuid.UUID
     name: str
-
-class UsersPageSchema(BaseModelConfig):
     students: list[StudentRead]
-    classrooms: list[ClassroomRead]
+
+class StudentsPageResponse(BaseModelConfig):
+  classrooms: list[ClassroomRead]
+  single_students: list[StudentRead]
+
+
+class FilterStudents(BaseModelConfig):
+  student_id: Optional[uuid.UUID] = None
+  classroom_id: Optional[uuid.UUID] = None
 
 
 class StudentFilterItem(BaseModelConfig):

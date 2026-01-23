@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
-from app.services.schema_base import BaseModelConfig
+from app.schemas.schema_base import BaseModelConfig
 
 if TYPE_CHECKING:
     from app.schemas.schema_files import IFile
@@ -64,13 +64,13 @@ class TasksFiltersReadSchema(BaseModelConfig):
 # create
 class CriterionCreate(BaseModel):
     name: str
-    score: int
+    score: int = Field(gt=0, description="Score must be greater than 0")
 
 class ExerciseCreate(BaseModel):
     name: str
     description: str
     order_index: int
-    criterions: list[CriterionCreate]
+    criterions: list[CriterionCreate] = Field(min_length=1, description="At least one criterion is required")
     files: list[str]  # Список ID файлов
 
 

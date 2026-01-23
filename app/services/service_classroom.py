@@ -1,9 +1,10 @@
 import uuid
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.model_classroom import Classrooms
+from app.models.model_users import Users, teachers_students
 from app.repositories.repo_classrooms import RepoClassroom
 from app.repositories.repo_teacher import RepoTeacher
 from app.utils.logger import logger
@@ -67,11 +68,31 @@ class ServiceClassroom(ServiceBase):
         return {"message": "success"}
 
 
-    async def delete(self, id: uuid.UUID):
-        classroom = await self.session.get(Classrooms, id)
+    async def delete(self, id: uuid.UUID, delete_users: bool, teacher: Users):
+        # Проверяем существование класса и принадлежность учителю
+        stmt = (
+            select(Classrooms)
+            .where(Classrooms.id == id)
+            .where(Classrooms.teacher_id == teacher.id)
+        )
+        result = await self.session.execute(stmt)
+        classroom = result.scalar_one_or_none()
+        
         if classroom is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "This classroom doesn't exists")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Classroom not found or doesn't belong to this teacher"
+            )
 
+        # Если нужно удалить студентов, удаляем их связи с учителем
+        if delete_users:
+            delete_stmt = (
+                delete(teachers_students)
+                .where(teachers_students.c.teacher_id == teacher.id)
+                .where(teachers_students.c.classroom_id == id)
+            )
+            await self.session.execute(delete_stmt)
+        
         await self.session.delete(classroom)
         await self.session.commit()
         return {"message": "success"}

@@ -9,7 +9,7 @@ from typing import List, Optional, Dict
 from datetime import datetime, date
 
 from app.models.model_works import StatusWork
-from app.services.schema_base import BaseModelConfig
+from app.schemas.schema_base import BaseModelConfig
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
