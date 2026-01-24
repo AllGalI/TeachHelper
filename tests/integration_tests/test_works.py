@@ -5,7 +5,7 @@ import pytest
 import pytest_asyncio
 
 from app.config.config_app import settings
-from app.db import AsyncSessionLocal
+from app.config.db import AsyncSessionLocal
 from app.models.model_tasks import Criterions, Exercises, Tasks
 from app.models.model_users import Users
 from fastapi import HTTPException

@@ -4,7 +4,7 @@ import uuid
 from fastapi import APIRouter, Depends
 
 from app.config.config_app import settings
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.models.model_users import Users
 from app.schemas.schema_students import FilterStudents, StudentsPageResponse, StudentsReadSchemaTeacher
 from app.services.teacher.service_students import ServiceStudents

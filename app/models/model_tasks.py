@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 
-from sqlalchemy import ARRAY, UUID, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import ARRAY, UUID, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from app.models.base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,13 +28,6 @@ class Exercises(Base):
         passive_deletes=True,
     )
 
-    # exercises: Mapped[list["Exercises"]] = relationship(
-    #     "Exercises",
-    #     backref="exercise",
-    #     cascade="all"
-    #     passive_deletes=True,
-    # )
-
 
 
 
@@ -45,6 +38,9 @@ class Tasks(Base):
     name: Mapped[str] = mapped_column(String(), nullable=False)
     description: Mapped[str] = mapped_column(String())
     deadline: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (
         UniqueConstraint('name', 'subject_id', 'teacher_id', name='_name_subject_teacher_uc'),

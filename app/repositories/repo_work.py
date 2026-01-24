@@ -9,6 +9,7 @@ from app.models.model_subjects import Subjects
 from app.models.model_tasks import Criterions, Exercises, Tasks
 from app.models.model_users import RoleUser, Users, teachers_students
 from app.models.model_works import Assessments, StatusWork, Works, Answers
+from app.models.model_files import AnswerFiles
 from app.schemas.schema_work import SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkAllFilters
 from app.utils.logger import logger
 
@@ -470,6 +471,8 @@ class RepoWorks():
                     .selectinload(Comments.coordinates),
                     selectinload(Works.answers)
                     .selectinload(Answers.exercise),
+                    selectinload(Works.answers)
+                    .selectinload(Answers.files),  # Загружаем файлы ответов
                     selectinload(Works.task)
                     .selectinload(Tasks.exercises)
                     .selectinload(Exercises.criterions)

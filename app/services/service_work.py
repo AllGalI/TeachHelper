@@ -11,9 +11,10 @@ from app.models.model_comments import Comments
 from app.models.model_tasks import Tasks
 from app.models.model_users import  RoleUser, Users, teachers_students
 from app.models.model_works import Assessments, Answers, StatusWork, Works
+from app.models.model_files import AnswerFiles, StatusAnswerFile
 from app.repositories.repo_task import RepoTasks
 from app.schemas.schema_comment import CommentRead, Coordinates as CoordinatesSchema
-from app.schemas.schema_files import IFile, compare_lists
+from app.schemas.schema_files import IFile, IFileAnswer, IFileAnserUpdate, compare_lists
 from app.schemas.schema_work import AnswerUpdate, CriterionRead, ExerciseRead, TaskRead
 from app.config.boto import delete_files_from_s3, get_presigned_url
 from app.config.rabbit import WorkRequestDTO, channel
@@ -175,7 +176,7 @@ class ServiceWork(ServiceBase):
                     raise ErrorPermissionDenied()
 
             # Применяем изменения с учетом прав доступа
-            await apply_work_updates(work_db, update_data, user)
+            await apply_work_updates(work_db, update_data, user, self.session)
             # Явно добавляем объект в сессию для отслеживания изменений
             # Это гарантирует, что SQLAlchemy отследит все изменения
             
@@ -214,7 +215,7 @@ class ServiceWork(ServiceBase):
                     selectinload(Works.answers).load_only(Answers.id)
                 )
             )
-            
+
 
             result = await self.session.execute(stmt)
             work_db = result.scalars().first()
@@ -363,19 +364,39 @@ async def orm_to_comment_read(comment_orm: Comments) -> CommentRead:
     )
 
 
+async def orm_answer_files_to_ifile_answer(answer_files: list[AnswerFiles]) -> list[IFileAnswer]:
+    """
+    Преобразование списка AnswerFiles ORM в список IFileAnswer схем.
+    
+    Args:
+        answer_files: Список объектов AnswerFiles из базы данных
+        
+    Returns:
+        Список IFileAnswer с presigned URLs и статусами
+    """
+    files = []
+    if answer_files:
+        for answer_file in answer_files:
+            try:
+                # Получаем presigned URL для файла
+                presigned_url = await get_presigned_url(answer_file.key)
+                # Создаём IFileAnswer с ключом, URL и статусом AI
+                files.append(IFileAnswer(
+                    key=answer_file.key,
+                    file=presigned_url,
+                    ai_status=answer_file.ai_status
+                ))
+            except Exception as exc:
+                logger.warning(f"Failed to get presigned URL for file {answer_file.key}: {exc}")
+    return files
+
+
 async def orm_to_answer_read(answer_orm: Answers) -> AnswerRead:
     """Преобразование Answer ORM в AnswerRead схему"""
     import asyncio
 
-    # Получаем presigned URLs для файлов
-    files = []
-    if answer_orm.files:
-        for key in answer_orm.files:
-            try:
-                presigned_url = await get_presigned_url(key)
-                files.append(IFile(key=key, file=presigned_url))
-            except Exception as exc:
-                logger.warning(f"Failed to get presigned URL for file {key}: {exc}")
+    # Получаем файлы ответов с использованием новой логики
+    files = await orm_answer_files_to_ifile_answer(answer_orm.files if answer_orm.files else [])
     
     # Преобразуем assessments и comments
     assessments = [await orm_to_assessment_read(ass) for ass in answer_orm.assessments]
@@ -451,7 +472,7 @@ async def orm_to_work_read(work_orm: Works) -> WorkRead:
     )
 
 
-async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: Users):
+async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: Users, session: AsyncSession):
     """Применение обновлений к работе с проверкой прав доступа"""
     # Определяем статусы в порядке возрастания
     status_order = {
@@ -502,7 +523,7 @@ async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: User
         
         
         # Обновляем answers (только text и files)
-        await update_answers_for_student(work_db, update_data.answers)
+        await update_answers_for_student(work_db, update_data.answers, session)
         
     elif user.role is RoleUser.teacher:
         # Учитель может изменять:
@@ -543,10 +564,61 @@ async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: User
             work_db.finish_date = datetime.utcnow()
         
         # Обновляем answers (general_comment и assessments)
-        await update_answers_for_teacher(work_db, update_data.answers)
+        await update_answers_for_teacher(work_db, update_data.answers, session)
 
 
-async def update_answers_for_student(work_db: Works, answers_update: list[AnswerUpdate]):
+async def update_answer_files(
+    answer_db: Answers,
+    files_update: list[IFileAnserUpdate],
+    session: AsyncSession
+) -> list[str]:
+    """
+    Обновление файлов ответа: создание, обновление и удаление записей AnswerFiles.
+    
+    Args:
+        answer_db: Объект ответа из базы данных
+        files_update: Список файлов для обновления (IFileAnserUpdate)
+        session: Сессия базы данных для удаления файлов
+        
+    Returns:
+        Список ключей файлов, которые нужно удалить из S3
+    """
+    files_to_delete = []
+    
+    # Создаём словарь существующих файлов по ключу
+    existing_files_by_key = {file.key: file for file in (answer_db.files or [])}
+    
+    # Создаём множество ключей из обновления
+    update_keys = {file.key for file in files_update}
+    
+    # Определяем файлы для удаления (есть в базе, но нет в обновлении)
+    keys_to_remove = set(existing_files_by_key.keys()) - update_keys
+    
+    # Удаляем файлы из базы данных
+    for key in keys_to_remove:
+        file_to_remove = existing_files_by_key[key]
+        files_to_delete.append(key)  # Добавляем ключ для удаления из S3
+        session.delete(file_to_remove)  # Удаляем из базы данных
+    
+    # Обрабатываем файлы из обновления
+    for file_update in files_update:
+        if file_update.key in existing_files_by_key:
+            # Обновляем существующий файл (меняем только ai_status)
+            existing_file = existing_files_by_key[file_update.key]
+            existing_file.ai_status = file_update.ai_status
+        else:
+            # Создаём новый файл
+            new_file = AnswerFiles(
+                answer_id=answer_db.id,
+                key=file_update.key,
+                ai_status=file_update.ai_status
+            )
+            answer_db.files.append(new_file)
+    
+    return files_to_delete
+
+
+async def update_answers_for_student(work_db: Works, answers_update: list[AnswerUpdate], session: AsyncSession):
     """Обновление ответов студентом (только text и files)"""
     files_to_delete = []
     
@@ -559,22 +631,28 @@ async def update_answers_for_student(work_db: Works, answers_update: list[Answer
         if answer_id and answer_id in existing_answers:
             answer_db = existing_answers[answer_id]
             
-            # Обновляем только text и files
+            # Обновляем только text
             answer_db.text = answer_update.text
             
-            # Обрабатываем файлы: преобразуем list[IFile] в list[str] (ключи)
-            if answer_db.files != answer_update.files:
-                file_changes = compare_lists(answer_db.files, answer_update.files)
-                files_to_delete.extend(file_changes['removed'])
-                answer_db.files = answer_update.files
+            # Обрабатываем файлы через новую логику
+            if answer_update.files:
+                deleted_keys = await update_answer_files(
+                    answer_db,
+                    answer_update.files,
+                    session
+                )
+                files_to_delete.extend(deleted_keys)
     
     # Удаляем файлы из S3
     if files_to_delete:
         await delete_files_from_s3(files_to_delete)
 
 
-async def update_answers_for_teacher(work_db: Works, answers_update: list[AnswerUpdate]):
-    """Обновление ответов учителем (general_comment и assessments)"""
+async def update_answers_for_teacher(work_db: Works, answers_update: list[AnswerUpdate], session: AsyncSession):
+    """
+    Обновление ответов учителем (general_comment, assessments и ai_status файлов).
+    Учитель может обновлять ai_status существующих файлов, но не может добавлять/удалять файлы.
+    """
     # Создаем словарь существующих ответов по ID
     existing_answers = {answer.id: answer for answer in work_db.answers}
     
@@ -586,6 +664,17 @@ async def update_answers_for_teacher(work_db: Works, answers_update: list[Answer
             
             # Обновляем general_comment
             answer_db.general_comment = answer_update.general_comment
+            
+            # Обновляем ai_status файлов (учитель может только обновлять статусы существующих файлов)
+            if answer_update.files:
+                # Создаём словарь существующих файлов по ключу
+                existing_files_by_key = {file.key: file for file in (answer_db.files or [])}
+                
+                # Обновляем ai_status только для существующих файлов
+                for file_update in answer_update.files:
+                    if file_update.key in existing_files_by_key:
+                        existing_file = existing_files_by_key[file_update.key]
+                        existing_file.ai_status = file_update.ai_status
             
             # Обновляем assessments
             if answer_update.assessments:

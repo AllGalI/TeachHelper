@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.model_users import Users
 from app.repositories.repo_user import RepoUser
 from app.config.config_app import settings
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.schemas.schema_auth import UserRead
 
 

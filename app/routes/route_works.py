@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.models.model_users import Users
 from app.schemas.schema_comment import *
 from app.schemas.schema_work import SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkRead, WorkUpdate, WorksFilterResponseStudent, WorksFilterResponseTeacher
@@ -83,16 +83,16 @@ async def send_work_to_verification(
     return await service.send_work_to_verification(work_id, user)
 
 
-@router.post("/{work_id}/ai")
-async def create_ai_comments(
-    work_id: uuid.UUID,
-    comments: list[AICommentDTO],
-    session: AsyncSession = Depends(get_async_session),
-    user: Users = Depends(get_current_user)
-):
-    service = ServiceComments(session)
-    return await service.ai_create(
-        work_id,
-        comments,
-        user
-    )
+# @router.post("/{work_id}/ai")
+# async def create_ai_comments(
+#     work_id: uuid.UUID,
+#     comments: list[AICommentDTO],
+#     session: AsyncSession = Depends(get_async_session),
+#     user: Users = Depends(get_current_user)
+# ):
+#     service = ServiceComments(session)
+#     return await service.ai_create(
+#         work_id,
+#         comments,
+#         user
+#     )

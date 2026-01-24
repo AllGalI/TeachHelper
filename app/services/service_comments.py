@@ -5,9 +5,11 @@ from sqlalchemy import select
 
 from app.exceptions.responses import *
 from app.models.model_comments import Comments, Coordinates
+from app.models.model_files import StatusAnswerFile
 from app.models.model_users import RoleUser, Users
 from app.models.model_works import Answers, Works
-from app.schemas.schema_comment import AICommentDTO, CommentCreate, CommentUpdate
+from app.schemas.schema_AI import AnswerFiles, SchemaOutgoing
+from app.schemas.schema_comment import CommentCreate, CommentUpdate
 from app.schemas.schema_files import compare_lists
 from app.config.boto import delete_files_from_s3
 from app.utils.logger import logger
@@ -15,44 +17,39 @@ from app.services.service_base import ServiceBase
 
 
 class ServiceComments(ServiceBase):
-
-    async def ai_create(
+    @staticmethod
+    async def save_ai_results(
         self,
-        work_id: uuid.UUID,
-        comments: list[AICommentDTO],
-        user: Users,
+        data: SchemaOutgoing
     ):
         try:
-            if user.role is not RoleUser.admin:
-                logger.exception(f"User: {user.id}, tried to create ai_comment")
-                raise ErrorPermissionDenied()
-            """
-            Добавить пользователся HtrClient и дать ему возможность создавать комментарии
-            """
-            orm_comments: list[Comments] = []
-            for comment in comments:
-                comment_orm = Comments(
-                    answer_id=comment.answer_id,
-                    answer_file_key=comment.answer_file_key,
-                    description=comment.description,
-                    type_id=comment.type_id,
-                    human=False,
-                )
+            for answer in data.answers:
+                for comments in answer.comments:
+                    orm_comments: list[Comments] = []
+                    for comment in comments:
+                        comment_orm = Comments(
+                            answer_id=comment.answer_id,
+                            answer_file_key=comment.answer_file_key,
+                            description=comment.description,
+                            type_id=comment.type_id,
+                            human=False,
+                        )
 
-                for coordinate in comment.coordinates:
-                    comment_orm.coordinates.append(Coordinates(
-                        x1=coordinate.x1,
-                        y1=coordinate.y1,
-                        x2=coordinate.x2,
-                        y2=coordinate.y2,
-                    ))
-                orm_comments.append(comment_orm)
-            
-            self.session.add_all(orm_comments)
-            work_db = await self.session.get(Works, work_id)
-            work_db.ai_verificated = True
+                        for coordinate in comment.coordinates:
+                            comment_orm.coordinates.append(Coordinates(
+                                x1=coordinate.x1,
+                                y1=coordinate.y1,
+                                x2=coordinate.x2,
+                                y2=coordinate.y2,
+                            ))
+                        orm_comments.append(comment_orm)
+                    
+                    self.session.add_all(orm_comments)
+                    answer_file = await self.session.get(AnswerFiles, comment.answerfile_id)
+                    answer_file.ai_status = StatusAnswerFile.verified
 
-            await self.session.commit()
+                    await self.session.commit()
+
             return Success()
 
         except HTTPException:
@@ -72,16 +69,13 @@ class ServiceComments(ServiceBase):
         try:
             if user.role is RoleUser.student:
                 raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
-            """
-            Добавить пользователся HtrClient и дать ему возможность создавать комментарии
-            """
 
             comment_orm = Comments(
                 answer_id=comment.answer_id,
                 answer_file_key=comment.answer_file_key,
                 description=comment.description,
                 type_id=comment.type_id,
-                human=True,
+                human=comment.human,
                 files=comment.files
             )
 

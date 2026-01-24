@@ -1,6 +1,6 @@
 import uuid
 from pydantic import BaseModel
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from app.models.model_comments import Coordinates
 from app.schemas.schema_base import BaseModelConfig
@@ -15,39 +15,37 @@ class Coordinates(BaseModelConfig):
     x2: float
     y2: float
 
-class AICommentDTO(BaseModelConfig):
-    answer_id: uuid.UUID
-    answer_file_key: str  # Ключ файла ответа из хранилища
-    description: str
-    type_id: uuid.UUID
-    coordinates: list[Coordinates]
-
-class AIAnswerDTO(BaseModelConfig):
-    id: uuid.UUID
-    comments: list[AICommentDTO]
-
-class AIWorkDTO(BaseModelConfig):
-    id: uuid.UUID
-    answers: list[AIAnswerDTO]
-
 
 class CommentCreate(BaseModel):
     answer_id: uuid.UUID
-    answer_file_key: str  # Ключ файла ответа из хранилища
+    answerfile_id: uuid.UUID  # Ключ файла ответа из хранилища
     description: str
     type_id: uuid.UUID
     coordinates: list[Coordinates]
     files: list[str]
+    human: Optional[bool] = True
 
 
 class CommentRead(BaseModelConfig):
     id: uuid.UUID
     answer_id: uuid.UUID
-    answer_file_key: str  # Ключ файла ответа из хранилища
+    answerfile_id: uuid.UUID  # Ключ файла ответа из хранилища
     description: str
     type_id: uuid.UUID
     coordinates: list[Coordinates]
     files: list["IFile"]  # Ключи файлов из хранилища
+
+
+
+class SchemaCommentTypesBase(BaseModelConfig):
+    short_name: str
+    name: str
+
+class SchemaCommentTypesRead(BaseModelConfig):
+    id: uuid.UUID
+    short_name: str
+    name: str
+
 
 
 # Вызов model_rebuild() для разрешения forward references

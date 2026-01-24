@@ -20,7 +20,7 @@ from httpx import ASGITransport, AsyncClient
 import pytest
 from app.models.base import Base
 from main import app
-from app.db import AsyncSessionLocal, engine_async
+from app.config.db import AsyncSessionLocal, engine_async
 from app.config.config_app import settings
 from app.utils.logger import logger
 

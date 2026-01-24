@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.schemas.schema_comment import CommentRead
-    from app.schemas.schema_files import IFile
+    from app.schemas.schema_files import IFile, IFileAnswer, IFileAnserUpdate
 
 
 class WorkAllFilters(BaseModel):
@@ -59,7 +59,7 @@ class AnswerRead(BaseModelConfig):
     exercise_id: uuid.UUID
     text: str
     general_comment: str
-    files: list["IFile"]  # IFile из другого модуля
+    files: list["IFileAnswer"]  # IFile из другого модуля
 
     exercise: ExerciseRead  # ExerciseRead определен в том же файле
     assessments: list[AssessmentRead]  # AssessmentRead определен в том же файле
@@ -92,7 +92,7 @@ class AnswerUpdate(BaseModelConfig):
     exercise_id: uuid.UUID | None = None
     text: str
     general_comment: str
-    files: list[str]  # IFile из другого модуля
+    files: list["IFileAnserUpdate"]
 
     assessments: list[AssessmentUpdate]  # AssessmentUpdate определен в том же файле
 
@@ -187,19 +187,19 @@ class WorksFilterResponseStudent(BaseModelConfig):
 def _rebuild_models():
     """Пересборка моделей для разрешения строковых аннотаций"""
     from app.schemas.schema_comment import CommentRead
-    from app.schemas.schema_files import IFile
+    from app.schemas.schema_files import IFile, IFileAnswer, IFileAnserUpdate
     
     # Пересборка моделей, использующих классы из других модулей
     # Порядок важен: сначала модели, которые зависят только от внешних модулей,
     # затем модели, которые зависят от уже пересобранных моделей
     
-    # Модели Read (используют IFile и CommentRead из других модулей)
+    # Модели Read (используют IFile, IFileAnswer и CommentRead из других модулей)
     ExerciseRead.model_rebuild()  # использует IFile из другого модуля
-    AnswerRead.model_rebuild()  # использует CommentRead и IFile из других модулей
+    AnswerRead.model_rebuild()  # использует CommentRead и IFileAnswer из других модулей
     WorkRead.model_rebuild()  # использует AnswerRead и TaskRead
     
-    # Модели Update (используют IFile из другого модуля)
-    AnswerUpdate.model_rebuild()  # использует IFile из другого модуля и AssessmentUpdate
+    # Модели Update (используют IFileAnserUpdate из другого модуля)
+    AnswerUpdate.model_rebuild()  # использует IFileAnserUpdate из другого модуля и AssessmentUpdate
     WorkUpdate.model_rebuild()  # использует AnswerUpdate
 
 _rebuild_models()

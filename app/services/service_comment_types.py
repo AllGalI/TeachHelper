@@ -17,8 +17,10 @@ class SchemaCommentTypesBase(BaseModelConfig):
     short_name: str
     name: str
 
-class SchemaCommentTypesRead(SchemaCommentTypesBase):
+class SchemaCommentTypesRead(BaseModelConfig):
     id: uuid.UUID
+    short_name: str
+    name: str
 
 
 class ServiceCommentTypes(ServiceBase):

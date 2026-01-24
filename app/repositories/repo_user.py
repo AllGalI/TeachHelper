@@ -15,7 +15,6 @@ class RepoUser:
         response = await self.session.execute(stmt)
         result = response.scalar_one_or_none()
         return result is not None
-        
 
     async def create(self, user: Users) -> Users:
         self.session.add(user)

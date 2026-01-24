@@ -1,5 +1,3 @@
-from functools import lru_cache
-from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import computed_field
 
@@ -26,6 +24,18 @@ class Settings(BaseSettings):
     BUCKET_TEMP: str = "temp"
     BUCKET_PERMANENT: str = "permanent"
 
+    # pika
+    PIKA_HOST: str
+    PIKA_PORT: int
+    PIKA_USER: str
+    PIKA_PASSWORD: str
+    PIKA_INCOMING_QUEUE: str
+    PIKA_OUTGOING_QUEUE: str
+
+    @computed_field
+    @property
+    def pika_url(self) -> str:
+      return f"amqp://{self.PIKA_USER}:{self.PIKA_PASSWORD}@{self.PIKA_HOST}:{self.PIKA_PORT}/"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

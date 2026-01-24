@@ -1,14 +1,42 @@
-
+from typing import TYPE_CHECKING, Optional
+import uuid
 from pydantic import BaseModel
 
+if TYPE_CHECKING:
+    from app.models.model_files import StatusAnswerFile
+
 class UploadFileResponse(BaseModel):
-  key: str
-  upload_link: str
+    key: str
+    upload_link: str
 
 class IFile(BaseModel):
-  key: str
-  file: str
-  type: str = 'permanent'
+    key: str
+    file: str
+    type: str = 'permanent'
+
+class IFileAnswer(BaseModel):
+    id: uuid.UUID
+    key: str
+    file: str
+    type: str = 'permanent'
+    ai_status: "StatusAnswerFile"
+
+class IFileAnserUpdate(BaseModel):
+    id: uuid.UUID
+    key: str
+    ai_status: Optional["StatusAnswerFile"] = None
+
+
+# Вызов model_rebuild() для разрешения forward references
+def _rebuild_models():
+    """Пересборка моделей для разрешения строковых аннотаций"""
+    from app.models.model_files import StatusAnswerFile
+    
+    # Пересборка моделей, использующих StatusAnswerFile
+    IFileAnswer.model_rebuild()
+    IFileAnserUpdate.model_rebuild()
+
+_rebuild_models()
 
 
 def compare_lists(old_list, new_list):

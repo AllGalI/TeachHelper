@@ -3,7 +3,7 @@
 import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.models.model_users import Users
 from app.schemas.schema_classroom import SchemaClassroom, SchemaClassroomsFilter
 from app.services.service_classroom import ServiceClassroom

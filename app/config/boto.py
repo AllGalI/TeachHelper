@@ -96,8 +96,6 @@ async def get_presigned_url(filekey: str):
       print(f"Ошибка получения ссылки: {e}")
       raise e
 
-
-
 async def delete_files_from_s3(file_keys: list[str]):
     if not file_keys: return
     async with get_boto_client() as s3:

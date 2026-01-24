@@ -1,7 +1,7 @@
 from typing import Annotated
 from fastapi import APIRouter, Depends
 
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.schemas.schema_journal import ClassroomPerformanse, FiltersClassroomJournalRequest, FiltersClassroomJournalResponse
 from app.services.service_journal import ServiceJournal
 from app.utils.oAuth import get_current_user

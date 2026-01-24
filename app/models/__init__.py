@@ -5,3 +5,4 @@ from .model_subjects import *
 from .model_tasks import *
 from .model_users import *
 from .model_works import *
+from .model_files import *

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.models.model_users import Users
 from app.schemas.schema_subjects import SubjectRead
 from app.services.service_subjects import ServiceSubjects

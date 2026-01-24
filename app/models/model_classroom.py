@@ -19,5 +19,6 @@ class Classrooms(Base):
         primaryjoin=lambda: Classrooms.id == teachers_students.c.classroom_id,
         secondaryjoin=lambda: teachers_students.c.student_id == Users.id,
         backref="classroom",
+        overlaps="students,teachers",  # Указываем, что это relationship перекрывается с students и teachers из Users
     )
 
