@@ -18,7 +18,7 @@ class Coordinates(Base):
 class Comments(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     answer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("answers.id", ondelete="CASCADE"), nullable=False)
-    answerfile_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("answerfile.id", ondelete="CASCADE"), nullable=False)
+    answerfile_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("answerfiles.id", ondelete="CASCADE"), nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
     type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("comment_types.id"), nullable=False)
     human: Mapped[bool] = mapped_column(Boolean, nullable=False)

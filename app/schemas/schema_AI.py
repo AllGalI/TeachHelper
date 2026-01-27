@@ -1,3 +1,5 @@
+import uuid
+from app.schemas.schema_base import BaseModelConfig
 import mimetypes
 import uuid
 from pydantic import BaseModel, field_validator
@@ -7,7 +9,7 @@ from app.models.model_works import StatusWork
 from app.schemas.schema_base import BaseModelConfig
 from app.schemas.schema_comment import SchemaCommentTypesRead
 
-class AnswerFiles(BaseModel):
+class AnswerFilesDTO(BaseModel):
     id: uuid.UUID
     key: str
     ai_status: StatusAnswerFile
@@ -39,20 +41,20 @@ class AnswerFiles(BaseModel):
 
 class AnswerAI(BaseModel):
     id: uuid.UUID
-    files: list[AnswerFiles]
+    files: list[AnswerFilesDTO]
 
-class SchemaIncoming(BaseModel):
+
+class SchemaIncomingFront(BaseModel):
+    work_id: uuid.UUID
+    answers: list[AnswerAI]
+
+class SchemaIncomingBack(BaseModel):
     work_id: uuid.UUID
     task_id: uuid.UUID
     status: StatusWork
     comment_types: list[SchemaCommentTypesRead]
     answers: list[AnswerAI]
 
-
-
-import uuid
-
-from app.schemas.schema_base import BaseModelConfig
 
 
 class Coordinates(BaseModelConfig):
@@ -70,9 +72,23 @@ class CommentOutgoing(BaseModelConfig):
     files: list[str] = []
     human: bool = False
 
+class AnswerFilesOutgoing(BaseModelConfig):
+    id: uuid.UUID
+    key: str
+    ai_status: StatusAnswerFile
+
+    @field_validator('ai_status')
+    @classmethod
+    def validate_ai_status(cls, v: StatusAnswerFile) -> StatusAnswerFile:
+        if v in {StatusAnswerFile.pending, StatusAnswerFile.draft}:
+            raise ValueError(f"C сервиса обработки должны возвращаться либо проверенные либо забаненные данные о файлах")
+        return v
+
 class AnswerOutgoing(BaseModelConfig):
     id: uuid.UUID
+    files: list[AnswerFilesOutgoing]
     comments: list[CommentOutgoing]
+
 
 class SchemaOutgoing(BaseModelConfig):
     answers: list[AnswerOutgoing]

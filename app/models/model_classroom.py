@@ -18,7 +18,8 @@ class Classrooms(Base):
         secondary=teachers_students,
         primaryjoin=lambda: Classrooms.id == teachers_students.c.classroom_id,
         secondaryjoin=lambda: teachers_students.c.student_id == Users.id,
-        backref="classroom",
-        overlaps="students,teachers",  # Указываем, что это relationship перекрывается с students и teachers из Users
+        viewonly=True,  # Только для чтения, так как связь управляется через teachers_students
+        overlaps="students,teachers,classrooms",  # Указываем, что это relationship перекрывается с relationships из Users
+        # Не используем backref, так как Users.classrooms уже настроен правильно
     )
 

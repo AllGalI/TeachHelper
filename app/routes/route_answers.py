@@ -10,5 +10,3 @@ from app.utils.oAuth import get_current_user
 router = APIRouter(prefix="/answers", tags=["Answers"])
 
 
-
-# @router.post('')

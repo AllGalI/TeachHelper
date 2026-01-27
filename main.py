@@ -23,6 +23,7 @@ from app.routes.route_tasks import router as router_tasks
 from app.routes.route_works import router as router_works
 from app.routes.route_comment_type import router as router_comment_types
 from app.routes.route_journal import router as router_journal
+from app.routes.route_ai_verification import router as router_ai
 
 
 def create_app() -> FastAPI:
@@ -70,6 +71,8 @@ def create_app() -> FastAPI:
     app.include_router(router_tasks)
     app.include_router(router_works)
     app.include_router(router_journal)
+    app.include_router(router_ai)
+    
 
 
     return app

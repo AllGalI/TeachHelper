@@ -8,6 +8,7 @@ from app.models.base import Base
 class StatusAnswerFile(str, enum.Enum):
   draft = 'draft'
   pending = 'pending'
+  verification = 'verification'
   verified = 'verified'
   banned = 'banned'
 

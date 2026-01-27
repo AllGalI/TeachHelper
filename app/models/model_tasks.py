@@ -46,6 +46,11 @@ class Tasks(Base):
         UniqueConstraint('name', 'subject_id', 'teacher_id', name='_name_subject_teacher_uc'),
     )
 
+    subject: Mapped["Subjects"] = relationship(
+        "Subjects",
+        backref="task"
+    )
+
     teacher: Mapped["Users"] = relationship(
         "Users",
         backref="tasks")

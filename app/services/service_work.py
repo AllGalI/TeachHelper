@@ -223,8 +223,6 @@ class ServiceWork(ServiceBase):
             if work_db is None:
                 raise ErrorNotExists(Works)
 
-            if work_db.ai_verificated:
-                raise HTTPException(status.HTTP_409_CONFLICT, "This work already verificated by AI")
 
             if work_db.status is not StatusWork.verification:
                 raise HTTPException(403, "Work must have verification status")
@@ -356,7 +354,7 @@ async def orm_to_comment_read(comment_orm: Comments) -> CommentRead:
     return CommentRead(
         id=comment_orm.id,
         answer_id=comment_orm.answer_id,
-        answer_file_key=comment_orm.answer_file_key,
+        answerfile_id=comment_orm.answerfile_id,
         description=comment_orm.description,
         type_id=comment_orm.type_id,
         coordinates=coordinates_list,
@@ -382,6 +380,7 @@ async def orm_answer_files_to_ifile_answer(answer_files: list[AnswerFiles]) -> l
                 presigned_url = await get_presigned_url(answer_file.key)
                 # Создаём IFileAnswer с ключом, URL и статусом AI
                 files.append(IFileAnswer(
+                    id=answer_file.id,
                     key=answer_file.key,
                     file=presigned_url,
                     ai_status=answer_file.ai_status
@@ -466,7 +465,6 @@ async def orm_to_work_read(work_orm: Works) -> WorkRead:
         finish_date=work_orm.finish_date,
         status=work_orm.status,
         conclusion=work_orm.conclusion or "",
-        ai_verificated=work_orm.ai_verificated,
         task=task_read,
         answers=answers
     )
@@ -574,6 +572,11 @@ async def update_answer_files(
 ) -> list[str]:
     """
     Обновление файлов ответа: создание, обновление и удаление записей AnswerFiles.
+    Логика работы:
+    - Если у файла есть id и он существует в БД - обновляем существующий файл
+    - Если у файла есть id, но его нет в БД - ошибка (некорректные данные)
+    - Если у файла нет id (None) - создаём новый файл
+    - Файлы, которые есть в БД, но отсутствуют в списке обновления - удаляются
     
     Args:
         answer_db: Объект ответа из базы данных
@@ -585,33 +588,52 @@ async def update_answer_files(
     """
     files_to_delete = []
     
-    # Создаём словарь существующих файлов по ключу
+    # Создаём словари существующих файлов по id и по ключу
+    existing_files_by_id = {file.id: file for file in (answer_db.files or [])}
     existing_files_by_key = {file.key: file for file in (answer_db.files or [])}
     
-    # Создаём множество ключей из обновления
-    update_keys = {file.key for file in files_update}
+    # Создаём множество id файлов из обновления (исключаем None)
+    update_ids = {file.id for file in files_update if file.id is not None}
     
     # Определяем файлы для удаления (есть в базе, но нет в обновлении)
-    keys_to_remove = set(existing_files_by_key.keys()) - update_keys
+    ids_to_remove = set(existing_files_by_id.keys()) - update_ids
     
     # Удаляем файлы из базы данных
-    for key in keys_to_remove:
-        file_to_remove = existing_files_by_key[key]
-        files_to_delete.append(key)  # Добавляем ключ для удаления из S3
+    for file_id in ids_to_remove:
+        file_to_remove = existing_files_by_id[file_id]
+        files_to_delete.append(file_to_remove.key)  # Добавляем ключ для удаления из S3
         session.delete(file_to_remove)  # Удаляем из базы данных
     
     # Обрабатываем файлы из обновления
     for file_update in files_update:
-        if file_update.key in existing_files_by_key:
-            # Обновляем существующий файл (меняем только ai_status)
-            existing_file = existing_files_by_key[file_update.key]
-            existing_file.ai_status = file_update.ai_status
+        if file_update.id is not None:
+            # Файл с id - обновляем существующий
+            if file_update.id in existing_files_by_id:
+                existing_file = existing_files_by_id[file_update.id]
+                # Обновляем ключ и статус, если они указаны
+                if file_update.key:
+                    existing_file.key = file_update.key
+                if file_update.ai_status is not None:
+                    existing_file.ai_status = file_update.ai_status
+            else:
+                # Файл с id не найден в БД - ошибка
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File with id {file_update.id} not found for answer {answer_db.id}"
+                )
         else:
-            # Создаём новый файл
+            # Файл без id - создаём новый
+            # Проверяем, что такого ключа ещё нет
+            if file_update.key in existing_files_by_key:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File with key {file_update.key} already exists for answer {answer_db.id}"
+                )
+            
             new_file = AnswerFiles(
                 answer_id=answer_db.id,
                 key=file_update.key,
-                ai_status=file_update.ai_status
+                ai_status=file_update.ai_status or StatusAnswerFile.draft
             )
             answer_db.files.append(new_file)
     

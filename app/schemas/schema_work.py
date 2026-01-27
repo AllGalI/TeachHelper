@@ -73,7 +73,6 @@ class WorkRead(BaseModelConfig):
     finish_date: datetime | None
     status: StatusWork
     conclusion: str
-    ai_verificated: bool
 
     task: TaskRead  # TaskRead определен в том же файле
     answers: list[AnswerRead]  # AnswerRead определен в том же файле
@@ -103,7 +102,6 @@ class WorkUpdate(BaseModelConfig):
     finish_date: datetime | None = None
     status: StatusWork
     conclusion: str
-    ai_verificated: bool
 
     answers: list[AnswerUpdate]  # AnswerUpdate определен в том же файле
 

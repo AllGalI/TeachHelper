@@ -21,8 +21,7 @@ class Settings(BaseSettings):
     
     
     # MinIO
-    BUCKET_TEMP: str = "temp"
-    BUCKET_PERMANENT: str = "permanent"
+    BUCKET: str = "permanent"
 
     # pika
     PIKA_HOST: str

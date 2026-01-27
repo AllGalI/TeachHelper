@@ -27,8 +27,8 @@ mc = Minio(
 )
 
 # Создаем бакеты, если их нет
-if not mc.bucket_exists(settings.BUCKET_PERMANENT):
-    mc.make_bucket(settings.BUCKET_PERMANENT)
+if not mc.bucket_exists(settings.BUCKET):
+    mc.make_bucket(settings.BUCKET)
 
 # --- Асинхронные функции для работы с файлами ---
 
@@ -57,7 +57,7 @@ async def get_upload_link_to_temp(original_filename: str) -> UploadFileResponse:
         upload_link = await s3.generate_presigned_url(
             'put_object',
             Params={
-                'Bucket': settings.BUCKET_PERMANENT,
+                'Bucket': settings.BUCKET,
                 'Key': new_filename,
                 'ContentType': extension
             },
@@ -76,7 +76,7 @@ async def get_object_photos(file_keys: list[str]):
             # Метод generate_presigned_url НЕ требует await
             url = await s3.generate_presigned_url(
                 'get_object',
-                Params={'Bucket': settings.BUCKET_PERMANENT, 'Key': key},
+                Params={'Bucket': settings.BUCKET, 'Key': key},
                 ExpiresIn=3600
             )
 
@@ -88,7 +88,7 @@ async def get_presigned_url(filekey: str):
         async with get_boto_client() as s3:
             url = await s3.generate_presigned_url(
                 'get_object',
-                Params={'Bucket': settings.BUCKET_PERMANENT, 'Key': filekey},
+                Params={'Bucket': settings.BUCKET, 'Key': filekey},
                 ExpiresIn=3600
             )
             return url
@@ -102,7 +102,7 @@ async def delete_files_from_s3(file_keys: list[str]):
         try:
             objects = [{'Key': k} for k in file_keys]
             await s3.delete_objects(
-                Bucket=settings.BUCKET_PERMANENT,
+                Bucket=settings.BUCKET,
                 Delete={'Objects': objects, 'Quiet': True}
             )
             await s3.delete_objects(

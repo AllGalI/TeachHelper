@@ -22,7 +22,7 @@ class IFileAnswer(BaseModel):
     ai_status: "StatusAnswerFile"
 
 class IFileAnserUpdate(BaseModel):
-    id: uuid.UUID
+    id: uuid.UUID | None = None
     key: str
     ai_status: Optional["StatusAnswerFile"] = None
 
