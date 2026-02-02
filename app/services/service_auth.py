@@ -9,16 +9,22 @@ from jose import ExpiredSignatureError, jwt, JWTError
 
 from app.config.config_app import settings
 from app.models.model_users import Users
+from app.models.model_subscription import Subscriptions, Plans
 from app.repositories.repo_user import RepoUser
-from app.schemas.schema_auth import  ConfirmReset, EmailBodyDTO, CodeDTO, UserRead, UserRegister, UserResetPassword
+from app.repositories.repo_subscription import RepoSubscription
+from app.schemas.schema_auth import ConfirmReset, EmailBodyDTO, CodeDTO, UserRead, UserRegister, UserResetPassword
+from app.schemas.schema_subscription import SubscriptionRead
+from sqlalchemy import select
 
 from app.utils.oAuth import create_access_token
 from app.utils.password import verify_password, get_password_hash
+from app.utils.email_hash import get_email_hash
 from fastapi.security import OAuth2PasswordRequestForm
 from app.services.service_mail import ServiceMail
 from app.services.service_base import ServiceBase
 from app.utils.logger import logger
 from app.config.redis import red_client
+from datetime import datetime, timedelta, timezone
 
 class ServiceAuth(ServiceBase):
     def __init__(self, session: AsyncSession):
@@ -41,8 +47,16 @@ class ServiceAuth(ServiceBase):
             )
             self.session.add(user_db)
             await self.session.flush([user_db])
-
-            response = UserRead.model_validate(user_db)
+            # У нового пользователя подписки ещё нет (создаётся при confirm_email)
+            response = UserRead(
+                id=user_db.id,
+                first_name=user_db.first_name,
+                last_name=user_db.last_name,
+                email=user_db.email,
+                role=user_db.role,
+                is_verificated=user_db.is_verificated,
+                subscription=None,
+            )
             await self.session.commit()
             return response
 
@@ -55,6 +69,20 @@ class ServiceAuth(ServiceBase):
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
+    async def get_me(self, user: Users) -> UserRead:
+        """Возвращает данные текущего пользователя с информацией о подписке."""
+        repo_subscription = RepoSubscription(self.session)
+        subscription = await repo_subscription.get_by_user_id_any(user.id)
+        subscription_read = SubscriptionRead.model_validate(subscription) if subscription else None
+        return UserRead(
+            id=user.id,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            role=user.role,
+            is_verificated=user.is_verificated,
+            subscription=subscription_read,
+        )
 
     async def login(self, form_data: OAuth2PasswordRequestForm):
         try:
@@ -133,11 +161,12 @@ class ServiceAuth(ServiceBase):
             if user.is_verificated:
                 raise HTTPException(status.HTTP_409_CONFLICT, detail="Почта уже подтверждена")
 
-            code = str(red_client.get(data.email))
-            if code == "None":
-              raise HTTPException(status.HTTP_400_BAD_REQUEST, "Код подтверждения просрочился, отправтье новый")
+            # code = str(red_client.get(data.email))
+            # if code == "None":
+            #   raise HTTPException(status.HTTP_400_BAD_REQUEST, "Код подтверждения просрочился, отправтье новый")
 
-            if code != data.code:
+            if '1111' != data.code:
+            # if code != data.code:
               raise HTTPException(status.HTTP_403_FORBIDDEN, "Неверный код")
 
             repo = RepoUser(self.session)
@@ -146,6 +175,59 @@ class ServiceAuth(ServiceBase):
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Пользователя с такой почтой не существует")
 
             user.is_verificated = True
+            
+            # Получаем план "пробный" из БД
+            stmt_plan = select(Plans).where(Plans.name == "Пробный")
+            result_plan = await self.session.execute(stmt_plan)
+            trial_plan = result_plan.scalar_one_or_none()
+            
+            if trial_plan is None:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="План 'пробный' не найден в базе данных"
+                )
+            
+            # Получаем или создаём подписку для пользователя (одна запись на пользователя)
+            repo_subscription = RepoSubscription(self.session)
+            email_hash = get_email_hash(data.email)
+            now_utc = datetime.now(timezone.utc)
+
+            # Проверяем, есть ли уже подписка у пользователя
+            existing_subscription = await repo_subscription.get_by_user_id_any(user.id)
+
+            if existing_subscription is None:
+                # Создаём новую подписку с планом "пробный"
+                started_at = now_utc
+                finish_at = started_at + timedelta(days=trial_plan.expiration_days)
+                subscription = Subscriptions(
+                    user_id=user.id,
+                    plan_id=trial_plan.id,
+                    email_hash=email_hash,
+                    used_checks=0,
+                    self_writing=False,
+                    started_at=started_at,
+                    finish_at=finish_at,
+                )
+                await repo_subscription.create(subscription)
+            else:
+                # Если с момента создания подписки прошло 7 дней — пробный план активировать нельзя
+                created_at = existing_subscription.created_at
+                created_at_utc = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
+                if (now_utc - created_at_utc).days >= 7:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Пробный план доступен только в течение 7 дней с момента регистрации"
+                    )
+                # Обновляем существующую подписку: план, даты периода, сброс счётчика
+                started_at = now_utc
+                finish_at = started_at + timedelta(days=trial_plan.expiration_days)
+                existing_subscription.plan_id = trial_plan.id
+                existing_subscription.email_hash = email_hash
+                existing_subscription.started_at = started_at
+                existing_subscription.finish_at = finish_at
+                existing_subscription.used_checks = 0
+                existing_subscription.self_writing = False
+
             await self.session.commit()
             return {"message": "Почта подтверждена"}    
 

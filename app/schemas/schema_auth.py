@@ -4,6 +4,7 @@ from pydantic import BaseModel, EmailStr
 
 from app.models.model_users import RoleUser
 from app.schemas.schema_base import BaseModelConfig
+from app.schemas.schema_subscription import SubscriptionRead
 
 class UserRegRole(str, Enum):
     teacher = "teacher"
@@ -59,13 +60,17 @@ class UserResetPassword(BaseModel):
     token: str
     password: str
 
-class UserRead(UserBase):
+class UserRead(BaseModel):
+    """Схема пользователя с информацией о подписке (если есть)."""
     id: uuid.UUID
+    first_name: str | None = None
+    last_name: str | None = None
+    email: EmailStr
     role: RoleUser
     is_verificated: bool
-    
+    subscription: SubscriptionRead | None = None  # подписка пользователя (одна запись на пользователя)
     model_config = {
-        "from_attributes": True 
+        "from_attributes": True,
     }
 
 class CodeDTO(BaseModel):

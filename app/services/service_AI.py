@@ -10,6 +10,7 @@ from app.models.model_subjects import Subjects
 from app.models.model_tasks import Tasks
 from app.models.model_users import RoleUser, Users
 from app.models.model_works import Works
+from app.repositories.repo_subscription import RepoSubscription
 from app.schemas.schema_AI import SchemaIncomingBack, SchemaIncomingFront
 from app.schemas.schema_comment import SchemaCommentTypesRead
 from app.services.service_base import ServiceBase
@@ -53,7 +54,34 @@ class ServiceAI(ServiceBase):
             # Проверяем, что задача принадлежит текущему учителю
             if work_db.task.teacher_id != teacher.id:
                 raise ErrorPermissionDenied()
-            
+
+            # Считаем количество фото, отправляемых на проверку
+            photos_count = sum(len(answer.files) for answer in data.answers)
+            if photos_count <= 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Нет файлов для отправки на проверку",
+                )
+
+            # Проверяем лимит подписки: нельзя отправить больше фото, чем осталось проверок
+            repo_subscription = RepoSubscription(self.session)
+            subscription = await repo_subscription.get_by_user_id(teacher.id)
+            if subscription is None or subscription.plan is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Нет активной подписки с планом для AI-проверок",
+                )
+            remaining = subscription.plan.verifications_count - subscription.used_checks
+            if photos_count > remaining:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Недостаточно проверок по подписке: отправлено {photos_count}, осталось {remaining}",
+                )
+
+            # Увеличиваем счётчик использованных проверок на количество отправляемых фото
+            subscription.used_checks += photos_count
+            await self.session.flush()
+
             # Получаем типы комментариев для предмета задачи
             comment_types = [
                 SchemaCommentTypesRead(

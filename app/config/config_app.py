@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     PIKA_INCOMING_QUEUE: str
     PIKA_OUTGOING_QUEUE: str
 
+
+    UKASSA_URL: str
+    UKASSA_SHOP_ID: str
+    UKASSA_SECRET_KEY: str
+
     @computed_field
     @property
     def pika_url(self) -> str:

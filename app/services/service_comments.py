@@ -9,12 +9,15 @@ from app.exceptions.responses import *
 from app.models.model_comments import Comments, Coordinates
 from app.models.model_files import AnswerFiles, StatusAnswerFile
 from app.models.model_users import RoleUser, Users
-from app.models.model_works import Works
-from sqlalchemy.orm import selectinload
+
+from app.models.model_works import Answers, Works
 from app.schemas.schema_AI import SchemaIncomingBack, SchemaOutgoing
 from app.schemas.schema_comment import CommentCreate, CommentUpdate
 from app.schemas.schema_files import compare_lists
 from app.config.boto import delete_files_from_s3
+from app.models.model_subscription import Subscriptions
+from app.models.model_tasks import Tasks
+from app.repositories.repo_subscription import RepoSubscription
 from app.utils.logger import logger
 from app.services.service_base import ServiceBase
 
@@ -49,6 +52,35 @@ class ServiceComments(ServiceBase):
         data: SchemaOutgoing
     ):
         try:
+            # Определяем teacher_id по первому ответу: answer -> work -> task -> teacher_id
+            first_answer_id = data.answers[0].id
+            stmt_work = (
+                select(Works)
+                .join(Answers, Works.id == Answers.work_id)
+                .where(Answers.id == first_answer_id)
+            )
+            result_work = await self.session.execute(stmt_work)
+            work = result_work.scalar_one_or_none()
+            if work is not None:
+                task = await self.session.get(Tasks, work.task_id)
+                if task is not None:
+                    repo_subscription = RepoSubscription(self.session)
+                    subscription = await repo_subscription.get_by_user_id_any(task.teacher_id)
+                    if subscription is not None:
+                        # Считаем забаненные фото в ответе AI
+                        banned_count = sum(
+                            1
+                            for answer in data.answers
+                            for a_file in answer.files
+                            if a_file.ai_status == StatusAnswerFile.banned
+                        )
+                        if banned_count > 0:
+                            subscription.used_checks = max(
+                                0,
+                                subscription.used_checks - banned_count,
+                            )
+                            await self.session.flush()
+
             for answer in data.answers:
                 orm_comments: list[Comments] = []
                 for comment in answer.comments:

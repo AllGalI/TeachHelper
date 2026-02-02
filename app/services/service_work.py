@@ -13,6 +13,8 @@ from app.models.model_users import  RoleUser, Users, teachers_students
 from app.models.model_works import Assessments, Answers, StatusWork, Works
 from app.models.model_files import AnswerFiles, StatusAnswerFile
 from app.repositories.repo_task import RepoTasks
+from app.repositories.repo_subscription import RepoSubscription
+from datetime import datetime, timezone
 from app.schemas.schema_comment import CommentRead, Coordinates as CoordinatesSchema
 from app.schemas.schema_files import IFile, IFileAnswer, IFileAnserUpdate, compare_lists
 from app.schemas.schema_work import AnswerUpdate, CriterionRead, ExerciseRead, TaskRead
@@ -146,6 +148,17 @@ class ServiceWork(ServiceBase):
                 # Учитель может видеть только работы по своим задачам
                 if work_db.task.teacher_id != user.id:
                     raise ErrorPermissionDenied()
+                
+                # Проверка наличия активной подписки для учителя
+                # get_by_user_id уже проверяет finish_at > datetime.now(timezone.utc)
+                repo_subscription = RepoSubscription(self.session)
+                subscription = await repo_subscription.get_by_user_id(user.id)
+                
+                if subscription is None or subscription.plan_id is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Данный функционал доступен по подписке. Пожалуйста, оформите подписку для доступа к проверке работ учеников."
+                    )
             
             # Преобразуем ORM в схему
             work_read = await orm_to_work_read(work_db)
@@ -174,6 +187,17 @@ class ServiceWork(ServiceBase):
             elif user.role is RoleUser.teacher:
                 if work_db.task.teacher_id != user.id:
                     raise ErrorPermissionDenied()
+                
+                # Проверка наличия активной подписки для учителя
+                # get_by_user_id уже проверяет finish_at > datetime.now(timezone.utc)
+                repo_subscription = RepoSubscription(self.session)
+                subscription = await repo_subscription.get_by_user_id(user.id)
+                
+                if subscription is None or subscription.plan_id is None:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Данный функционал доступен по подписке. Пожалуйста, оформите подписку для доступа к проверке работ учеников."
+                    )
 
             # Применяем изменения с учетом прав доступа
             await apply_work_updates(work_db, update_data, user, self.session)
@@ -203,6 +227,17 @@ class ServiceWork(ServiceBase):
         try:
             if user.role is RoleUser.student:
                 raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
+
+            # Проверка наличия активной подписки для учителя
+            # get_by_user_id уже проверяет finish_at > datetime.now(timezone.utc)
+            repo_subscription = RepoSubscription(self.session)
+            subscription = await repo_subscription.get_by_user_id(user.id)
+            
+            if subscription is None or subscription.plan_id is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Данный функционал доступен по подписке. Пожалуйста, оформите подписку для доступа к проверке работ учеников."
+                )
 
             stmt = (
                 select(Works)
@@ -477,7 +512,7 @@ async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: User
         StatusWork.draft: 0,
         StatusWork.inProgress: 1,
         StatusWork.verification: 2,
-        StatusWork.verificated: 3,
+        StatusWork.verified: 3,
         StatusWork.canceled: 4
     }
     
@@ -490,7 +525,7 @@ async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: User
         # Проверка статуса
         if update_data.status != work_db.status:
             # Студент не может обновлять работу со статусом verification или выше
-            if work_db.status in [StatusWork.verification, StatusWork.verificated]:
+            if work_db.status in [StatusWork.verification, StatusWork.verified]:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Student cannot update work with status beyond 'inProgress'"
@@ -527,15 +562,15 @@ async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: User
         # Учитель может изменять:
         # - answers.general_comment
         # - assessments.points
-        # - status (любые, но verificated только после verification)
+        # - status (любые, но verified только после verification)
         # - conclusion
 
 
-        # Проверка статуса verificated
-        if update_data.status == StatusWork.verificated and work_db.status != StatusWork.verification:
+        # Проверка статуса verified
+        if update_data.status == StatusWork.verified and work_db.status != StatusWork.verification:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Teacher can set 'verificated' only after 'verification'"
+                detail="Teacher can set 'verified' only after 'verification'"
             )
 
         # Проверка finish_date - учитель не может изменять напрямую
@@ -556,8 +591,8 @@ async def apply_work_updates(work_db: Works, update_data: WorkUpdate, user: User
         # Обновляем finish_date из update_data, если он указан (учитель может изменять)
         if update_data.finish_date is not None:
             work_db.finish_date = update_data.finish_date
-        # Или устанавливаем автоматически, если статус изменился на verification или verificated
-        elif update_data.status in [StatusWork.verification, StatusWork.verificated] and not work_db.finish_date:
+        # Или устанавливаем автоматически, если статус изменился на verification или verified
+        elif update_data.status in [StatusWork.verification, StatusWork.verified] and not work_db.finish_date:
             from datetime import datetime
             work_db.finish_date = datetime.utcnow()
         

@@ -10,7 +10,7 @@ class StatusWork(str, enum.Enum):
     draft        = "draft"
     inProgress   = "inProgress"
     verification = "verification"
-    verificated  = "verificated"
+    verified     = "verified"
     canceled     = "canceled"
 
 

@@ -30,7 +30,7 @@ async def send_code(data: EmailBodyDTO, session: AsyncSession = Depends(get_asyn
 @router.post("/confirm_email")
 async def confirm_email(data: CodeDTO, session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
-    return await service.confirm_email(data)   
+    return await service.confirm_email(data)
 
 @router.post("/forgot_password")
 async def forgot_password(email: EmailBodyDTO, session: AsyncSession = Depends(get_async_session)):
@@ -48,8 +48,13 @@ async def reset_password(data: UserResetPassword, session: AsyncSession = Depend
     return await service.reset_password(data)
 
 @router.get("/me", response_model=UserRead)
-async def me(current_user: Users = Depends(get_current_user)):
-    return UserRead.model_validate(current_user)
+async def me(
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user),
+):
+    """Текущий пользователь с информацией о подписке."""
+    service = ServiceAuth(session)
+    return await service.get_me(current_user)
 
 @router.delete("/{id}")
 async def delete(id: uuid.UUID, email: EmailStr, session: AsyncSession = Depends(get_async_session), current_user: Users = Depends(get_current_user)):

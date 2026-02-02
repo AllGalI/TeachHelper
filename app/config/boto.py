@@ -105,10 +105,6 @@ async def delete_files_from_s3(file_keys: list[str]):
                 Bucket=settings.BUCKET,
                 Delete={'Objects': objects, 'Quiet': True}
             )
-            await s3.delete_objects(
-                Bucket=settings.BUCKET_TEMP,
-                Delete={'Objects': objects, 'Quiet': True}
-            )
         except Exception as e:
             print(f"Ошибка удаления: {e}")
             raise e
