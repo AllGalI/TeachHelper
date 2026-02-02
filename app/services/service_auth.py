@@ -99,13 +99,16 @@ class ServiceAuth(ServiceBase):
 
             token = create_access_token({"email": form_data.username}, settings.SECRET)
             
-            response = JSONResponse(content={"message": "ok"})
+            response = JSONResponse(content={
+                "access_token": token,
+                "token_type": 'Bearer',
+            })
             response.set_cookie(
               "session",
               token,
               secure=True,
               httponly=True,
-              samesite="lax",
+              samesite='none',
               max_age=3600
 
             )

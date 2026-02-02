@@ -52,6 +52,7 @@ class PaymentStatus(str, enum.Enum):
     pending = "pending"
     succeeded = "succeeded"
     canceled = "canceled"
+    refunded = "refunded"
     failed = "failed"
 
 

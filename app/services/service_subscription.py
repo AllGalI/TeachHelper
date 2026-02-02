@@ -3,9 +3,11 @@ import uuid
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from yookassa import Configuration, Refund
 
+from app.config.config_app import settings
 from app.exceptions.responses import ErrorNotExists
-from app.models.model_subscription import Subscriptions, Payments, Plans
+from app.models.model_subscription import PaymentStatus, Subscriptions, Payments, Plans
 from app.repositories.repo_subscription import RepoSubscription
 from app.schemas.schema_subscription import SubscriptionCancel, SubscriptionStartPeriodRequest, SubscriptionRead
 from app.services.service_base import ServiceBase
@@ -60,9 +62,9 @@ class ServiceSubscription(ServiceBase):
                 select(Payments)
                 .where(
                     Payments.subscription_id == subscription.id,
-                    Payments.status == PaymentStatus.paid
+                    Payments.status == PaymentStatus.succeeded
                 )
-                .order_by(Payments.paid_at.desc())
+                .order_by(Payments.created_at.desc())
             )
             result = await self.session.execute(stmt)
             payment = result.scalar_one_or_none()
@@ -74,11 +76,11 @@ class ServiceSubscription(ServiceBase):
                 )
             
             # Проверяем условия возврата
-            # payment.paid_at уже имеет timezone, поэтому используем now() с timezone
+            # payment.created_at уже имеет timezone, поэтому используем now() с timezone
             now_utc = datetime.now(timezone.utc)
-            # Если paid_at имеет timezone, используем его, иначе считаем UTC
-            paid_at_utc = payment.paid_at if payment.paid_at.tzinfo else payment.paid_at.replace(tzinfo=timezone.utc)
-            days_since_payment = (now_utc - paid_at_utc).days
+            # Если created_at имеет timezone, используем его, иначе считаем UTC
+            created_at_utc = payment.created_at if payment.created_at.tzinfo else payment.created_at.replace(tzinfo=timezone.utc)
+            days_since_payment = (now_utc - created_at_utc).days
             can_refund = False
             refund_reason = ""
             
@@ -95,19 +97,61 @@ class ServiceSubscription(ServiceBase):
                 can_refund = True
                 refund_reason = "Условия для возврата выполнены"
             
-            # Если возврат возможен, обновляем статус платежа
+            # Если возврат возможен, отправляем запрос на возврат в ЮКассу и обновляем статус в БД
             if can_refund:
-                payment.status = PaymentStatus.refunded
-                # Здесь должна быть логика возврата через платежную систему (ЮКасса)
-                # Пока просто обновляем статус в БД
-                await self.session.commit()
+                # Проверяем наличие payment_provider_id (ID платежа от ЮКассы)
+                if not payment.payment_provider_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Не найден ID платежа от платежной системы"
+                    )
                 
-                return {
-                    "status": "success",
-                    "message": "Подписка отменена, возврат средств будет обработан",
-                    "refund_amount": payment.amount,
-                    "refund_currency": payment.currency
-                }
+                # Настраиваем конфигурацию ЮКассы
+                Configuration.account_id = settings.UKASSA_SHOP_ID
+                Configuration.secret_key = settings.UKASSA_SECRET_KEY
+                
+                # Формируем сумму возврата в формате строки с двумя знаками после запятой
+                refund_amount_value = f"{payment.amount:.2f}"
+                
+                try:
+                    # Создаем возврат через ЮКассу
+                    refund = Refund.create({
+                        "amount": {
+                            "value": refund_amount_value,
+                            "currency": "RUB"
+                        },
+                        "payment_id": payment.payment_provider_id,  # ID платежа от ЮКассы
+                        "description": f"Возврат средств за подписку {subscription.id}"
+                    })
+                    
+                    # Обновляем статус платежа в БД на refunded
+                    payment.status = PaymentStatus.refunded
+                    subscription.finish_at = datetime.now(timezone.utc)
+                    await self.session.commit()
+                    
+                    logger.info(
+                        f"Возврат средств успешно создан в ЮКассе. "
+                        f"Payment ID: {payment.id}, Refund ID: {refund.id}, Amount: {payment.amount} RUB"
+                    )
+                    
+                    return {
+                        "status": "success",
+                        "message": "Подписка отменена, возврат средств будет обработан",
+                        "refund_amount": payment.amount,
+                        "refund_currency": "RUB",
+                        "refund_id": refund.id  # ID возврата от ЮКассы
+                    }
+                    
+                except Exception as refund_exc:
+                    # Логируем ошибку и откатываем транзакцию
+                    logger.error(
+                        f"Ошибка при создании возврата в ЮКассе для платежа {payment.id}: {refund_exc}"
+                    )
+                    await self.session.rollback()
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Ошибка при создании возврата средств: {str(refund_exc)}"
+                    )
             else:
                 # Отменяем подписку без возврата: устанавливаем finish_at на текущую дату
                 subscription.finish_at = datetime.now(timezone.utc)

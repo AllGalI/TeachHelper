@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config.config_app import settings
 
@@ -47,16 +47,25 @@ def create_app() -> FastAPI:
             print("🛑 Background Save Worker stopped")
 
 
-    app = FastAPI(title="RU-Lang MVP API", lifespan=lifespan)
+    app = FastAPI(
+        title="RU-Lang MVP API",
+        lifespan=lifespan,
+        root_path="/api",
+        # docs_url="/docs",
+        # redoc_url="redoc",
+        # openapi_url="/api/openapi.json"
+    )
     # Настройка CORS из переменных окружения
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.FRONT_URL,
+        # allow_origins=settings.FRONT_URL,
+        allow_origins=["http://localhost:5173"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
 
 
     # Роутеры

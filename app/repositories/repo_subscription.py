@@ -1,7 +1,7 @@
 from typing import Optional, Sequence
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import select, and_
+from sqlalchemy import func, select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -47,13 +47,17 @@ class RepoSubscription:
         """Получение подписки пользователя без проверки активности (одна запись на пользователя)."""
         stmt = (
             select(Subscriptions)
-            .where(Subscriptions.user_id == user_id)
+            .where(
+                Subscriptions.user_id == user_id,
+                Subscriptions.finish_at > func.now()
+            )
             .options(selectinload(Subscriptions.plan))
             .order_by(Subscriptions.started_at.desc())
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    # использовать, чтобы не могли по одному и тому же email несколько раз бесплатный план брать
     async def get_by_email_hash(self, email_hash: str) -> Optional[Subscriptions]:
         """Получение подписки по хэшу email."""
         stmt = (
@@ -64,14 +68,3 @@ class RepoSubscription:
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
-
-    async def list_by_user_id(self, user_id: uuid.UUID) -> Sequence[Subscriptions]:
-        """Получение всех подписок пользователя."""
-        stmt = (
-            select(Subscriptions)
-            .where(Subscriptions.user_id == user_id)
-            .options(selectinload(Subscriptions.plan))
-            .order_by(Subscriptions.started_at.desc())
-        )
-        result = await self.session.execute(stmt)
-        return result.scalars().all()

@@ -95,7 +95,7 @@ class ServicePayments(ServiceBase):
 
             return yookassa_payment
             
-        except (ErrorRolePermissionDenied, ErrorNotExists) as exc:
+        except (ErrorRolePermissionDenied, ErrorNotExists, HTTPException) as exc:
             # Пробрасываем HTTP исключения без изменений
             raise
             
