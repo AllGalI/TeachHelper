@@ -1,3 +1,4 @@
+import asyncio
 import aio_pika
 
 from app.config.config_app import settings
@@ -6,8 +7,7 @@ from app.schemas.schema_AI import SchemaOutgoing
 from app.services.service_comments import ServiceComments
 from app.utils.logger import logger
 
-
-async def start_save_worker():
+async def main():
     """
     Worker для сохранения результатов AI-обработки в БД.
     Создаёт новую сессию БД для каждого сообщения из очереди.
@@ -36,3 +36,7 @@ async def start_save_worker():
                         logger.exception(f"Error processing AI results: {exc}")
                         # Сессия автоматически откатится при выходе из контекста
                         raise  # Повторно выбрасываем исключение, чтобы сообщение вернулось в очередь
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

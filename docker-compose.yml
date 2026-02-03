@@ -9,8 +9,24 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - minio
+      - rabbitmq
+
     volumes:
       - .:/app
+
+  save_ai_comments_consumer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: save_ai_comments_consumer
+    restart: always
+    env_file:
+      - .env
+    command: python -m app.external_services.save_ai_comments_consumer
+    depends_on:
+      - db
+      - rabbitmq
 
   db:
     image: postgres:15
@@ -41,6 +57,12 @@ services:
       - "15672:15672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq/mnesia
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:8.4.0-alpine

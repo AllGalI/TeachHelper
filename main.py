@@ -1,11 +1,8 @@
-import asyncio
-from contextlib import asynccontextmanager
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 
-from app.pika_workers.worker_save_comments import start_save_worker
 from app.routes.route_answers import router as router_answers
 from app.routes.route_assessments import router as router_assessments
 from app.routes.route_auth import router as router_auth
@@ -27,26 +24,9 @@ from app.routes.route_payments import router as router_payments
 
 
 def create_app() -> FastAPI:
-    @asynccontextmanager
-    async def lifespan(app: FastAPI):
-        # --- ДЕЙСТВИЯ ПРИ ЗАПУСКЕ ---
-        # Запускаем воркер как фоновую задачу
-        worker_task = asyncio.create_task(start_save_worker())
-        print("🚀 Background Save Worker started")
-        
-        yield  # Здесь приложение работает
-        
-        # --- ДЕЙСТВИЯ ПРИ ОСТАНОВКЕ ---
-        worker_task.cancel()
-        try:
-            await worker_task
-        except asyncio.CancelledError:
-            print("🛑 Background Save Worker stopped")
-
 
     app = FastAPI(
         title="RU-Lang MVP API",
-        lifespan=lifespan,
         root_path="/api"
     )
     # Настройка CORS из переменных окружения
