@@ -10,4 +10,5 @@ echo "✅ Postgres is up - running migrations"
 alembic upgrade head
 
 echo "🚀 Starting app"
-exec python main.py
+
+gunicorn -w 4 -k uvicorn.workers.UvicornWorker main:app

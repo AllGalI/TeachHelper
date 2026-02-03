@@ -1,14 +1,11 @@
 import asyncio
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import APIRouter, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.config.config_app import settings
 
 
-from app.models.model_users import RoleUser, Users
 from app.pika_workers.worker_save_comments import start_save_worker
-from app.repositories.teacher.repo_students import RepoStudents
 from app.routes.route_answers import router as router_answers
 from app.routes.route_assessments import router as router_assessments
 from app.routes.route_auth import router as router_auth
@@ -50,10 +47,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="RU-Lang MVP API",
         lifespan=lifespan,
-        root_path="/api",
-        # docs_url="/docs",
-        # redoc_url="redoc",
-        # openapi_url="/api/openapi.json"
+        root_path="/api"
     )
     # Настройка CORS из переменных окружения
 
