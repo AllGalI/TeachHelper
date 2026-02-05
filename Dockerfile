@@ -2,7 +2,7 @@
 FROM python:3.12-slim
 
 # Устанавливаем рабочую директорию в контейнере
-WORKDIR .
+WORKDIR /app-code
 
 # Устанавливаем системные зависимости для psycopg2 и других пакетов
 RUN apt-get update && apt-get install -y \

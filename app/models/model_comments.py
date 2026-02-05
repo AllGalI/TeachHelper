@@ -1,8 +1,7 @@
 from datetime import datetime
-import enum
 import uuid
 
-from sqlalchemy import UUID, Boolean, Column, Float, ForeignKey, Integer, String, Table
+from sqlalchemy import ARRAY, UUID, Boolean, Column, Float, ForeignKey, Integer, String, Table
 from app.models.base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,19 +18,11 @@ class Coordinates(Base):
 class Comments(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     answer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("answers.id", ondelete="CASCADE"), nullable=False)
-    answer_file_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("files.id", ondelete="CASCADE"), nullable=False)
+    answerfile_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("answerfiles.id", ondelete="CASCADE"), nullable=False)
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
     type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("comment_types.id"), nullable=False)
     human: Mapped[bool] = mapped_column(Boolean, nullable=False)
-
-
-    files: Mapped[list["Files"]] = relationship(
-        "Files",
-        secondary="comments_files",
-        backref="comment",
-        cascade="all, delete-orphan",
-        single_parent=True
-    )
+    files: Mapped[list[str]] = mapped_column(ARRAY(String()), nullable=False, default=[])
 
     coordinates: Mapped[list["Coordinates"]] = relationship(
         "Coordinates",

@@ -1,15 +1,18 @@
+import asyncio
 import uuid
 
 from fastapi import HTTPException, status, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import  joinedload, selectinload, Load
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.repo_task import RepoTasks
-from app.schemas.schema_tasks import TaskCreate, SchemaTask, TasksFilters, TasksReadEasy
+from app.schemas.schema_tasks import *
 from app.models.model_tasks import  Criterions, Exercises, Tasks
+from app.schemas.schema_files import IFile, compare_lists
+from app.config.boto import delete_files_from_s3, get_presigned_url
 
 from app.models.model_users import RoleUser, Users
 from app.utils.logger import logger
@@ -17,41 +20,46 @@ from app.services.service_base import ServiceBase
 
 class ServiceTasks(ServiceBase):
 
-    async def create(self, teacher: Users, data: TaskCreate) -> SchemaTask:
+    async def create(self, teacher: Users, data: TaskCreate) -> TaskRead:
         try:
             if teacher.role is RoleUser.student:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
 
-            task = Tasks(
-                name=data.name,
-                description=data.description,
-                subject_id=data.subject_id,
-                teacher_id=teacher.id,
-            )
+            # Создаем задачу, исключая вложенные структуры (exercises)
+            task_dict = data.model_dump(exclude={"exercises"})
+            task = Tasks(teacher_id=teacher.id, **task_dict)
 
-            for ex_data in data.exercises:
-                exercise = Exercises(
-                    name=ex_data.name,
-                    description=ex_data.description,
-                    order_index=ex_data.order_index,
-                )
+            # Создаем вложенные объекты Exercises и Criterions
+            exercises_orm = []
+            for exercise_data in data.exercises:
+                # Создаем критерии для каждого упражнения
+                criterions_orm = [
+                    Criterions(**criterion.model_dump())
+                    for criterion in exercise_data.criterions
+                ]
 
-                for cr_data in ex_data.criterions:
-                    criterion = Criterions(
-                        name=cr_data.name,
-                        score=cr_data.score,
-                    )
-                    exercise.criterions.append(criterion)
-                task.exercises.append(exercise)
+                # Создаем упражнение, исключая criterions (они обрабатываются отдельно)
+                exercise_dict = exercise_data.model_dump(exclude={"criterions"})
+                exercise_orm = Exercises(**exercise_dict)
+                # Присваиваем критерии и файлы упражнению
+                exercise_orm.criterions = criterions_orm
+                exercises_orm.append(exercise_orm)
+
+            # Присваиваем упражнения задаче
+            task.exercises = exercises_orm
 
             self.session.add(task)
+            await self.session.flush()  # Получаем ID задачи и упражнений
             await self.session.commit()
+            task_read = await orm_to_task_read(task)
+
             return JSONResponse(
-                content=SchemaTask.model_validate(task).model_dump(mode='json'),
+                content=task_read.model_dump(mode='json'),
                 status_code=status.HTTP_201_CREATED
             )
 
         except HTTPException as exc:
+            await self.session.rollback()
             raise
 
         except Exception as exc:
@@ -60,25 +68,15 @@ class ServiceTasks(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-    async def get_all(self, teacher: Users, filters: TasksFilters) -> list[TasksReadEasy]:
+    async def get_all(self, teacher: Users, filters: TasksFilters) -> list[TasksListItem]:
         try:
             if teacher.role is RoleUser.student:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
 
-            query = (
-                select(
-                    Tasks.id,
-                    Tasks.name,
-                    Tasks.updated_at
-                )
-                .where(Tasks.teacher_id == teacher.id)
-            )
-            if filters.name is not None:
-               query = query.where(Tasks.name.ilike(f'%{filters.name}%'))
-            
-            response = await self.session.execute(query)
-            tasks =  response.mappings().all()
-            return [TasksReadEasy.model_validate(task) for task in tasks]
+            # Используем репозиторий для получения задач
+            repo = RepoTasks(self.session)
+            tasks = await repo.get_all(teacher.id, filters)
+            return [TasksListItem.model_validate(task) for task in tasks]
     
         except HTTPException as exc:
             raise
@@ -88,17 +86,30 @@ class ServiceTasks(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-    async def get(self, id: uuid.UUID, teacher: Users) -> SchemaTask:
+    async def get(self, id: uuid.UUID, teacher: Users) -> TaskRead:
         try:
             if teacher.role is RoleUser.student:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
-            repo = RepoTasks(self.session)
-            task = await repo.get(id)
 
+            # Загружаем задачу с файлами через selectinload
+            stmt = (
+                select(Tasks)
+                .where(Tasks.id == id)
+                .options(
+                    selectinload(Tasks.exercises).selectinload(Exercises.criterions),
+
+                )
+            )
+            result = await self.session.execute(stmt)
+            task = result.scalar_one_or_none()
+            
             if not task: 
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
-            return SchemaTask.model_validate(task)
+            task_read = await orm_to_task_read(task)
+
+            # Возвращаем JSON
+            return task_read.model_dump(mode="json")
 
         except HTTPException as exc:
             raise
@@ -109,35 +120,59 @@ class ServiceTasks(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-    async def update(self, id: uuid.UUID, update_data: SchemaTask, teacher: Users) -> SchemaTask:
+    async def update(self, id: uuid.UUID, update_data: TaskUpdate, teacher: Users) -> TaskRead:
         try:
             if teacher.role is RoleUser.student:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
 
-            task_db = await self.session.get(Tasks, id)
+            stmt = (
+                select(Tasks)
+                .where(Tasks.id == id)
+                .options(
+                    selectinload(Tasks.exercises).selectinload(Exercises.criterions),
+
+                )
+            )
+            result = await self.session.execute(stmt)
+            task_db = result.scalar_one_or_none()
+            
             if not task_db: 
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-            
+
             exercises_orm = []
+            files_to_delete = []
+
+            exercise_files = {}
+
+            for ex_db in task_db.exercises:
+              exercise_files[ex_db.id] = ex_db.files
+
             for exercise_data in update_data.exercises:
                 criterions_orm = [
                     Criterions(**criterion.model_dump())
                     for criterion in exercise_data.criterions
                 ]
 
+                files_to_delete.extend(compare_lists(exercise_files[exercise_data.id], exercise_data.files)['removed'])
+
                 exercise_dict = exercise_data.model_dump(exclude={"criterions"})
                 exercise_orm = Exercises(**exercise_dict)
                 exercise_orm.criterions = criterions_orm
-                exercises_orm.append(exercise_orm)
+
+            exercises_orm.append(exercise_orm)
 
             task_dict = update_data.model_dump(exclude={"exercises"})
             task_orm = Tasks(**task_dict)
             task_orm.exercises = exercises_orm
 
             await self.session.merge(task_orm)
+            await delete_files_from_s3(files_to_delete)
             await self.session.commit()
-            repo = RepoTasks(self.session)
-            return SchemaTask.model_validate(await repo.get(id)).model_dump(mode="json")
+
+            task_read = await orm_to_task_read(task_orm)
+            # Возвращаем JSON
+            return task_read.model_dump(mode="json")
+
 
         except HTTPException:
             raise
@@ -152,14 +187,44 @@ class ServiceTasks(ServiceBase):
             if teacher.role is RoleUser.student:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
 
-            task = await self.session.get(Tasks, id)
+            # Загружаем задачу с упражнениями и файлами для получения всех ключей файлов
+            stmt = (
+                select(Tasks)
+                .where(Tasks.id == id)
+                .options(
+                    selectinload(Tasks.exercises).selectinload(Exercises.criterions),
+                )
+            )
+            result = await self.session.execute(stmt)
+            task = result.scalar_one_or_none()
+            
             if task is None:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
             if task.teacher_id != teacher.id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User don't have permission to delete this task")
 
-            await self.session.delete(task)
+            # Собираем все ключи файлов для удаления из S3
+            file_keys_to_delete = []
+            
+            # Добавляем ключи изображений задачи, если они есть
+
+            # Добавляем ключи файлов из всех упражнений через связи Files
+            if task.exercises:
+                for exercise in task.exercises:
+                    file_keys_to_delete.extend(exercise.files)
+
+            # Удаляем файлы из S3, если есть ключи для удаления
+            if file_keys_to_delete:
+                try:
+                    await delete_files_from_s3(file_keys_to_delete)
+                except Exception as s3_exc:
+                    # Логируем ошибку, но продолжаем удаление задачи из БД
+                    logger.warning(f"Failed to delete files from S3: {s3_exc}")
+
+            # Удаляем задачу из БД (каскадно удалятся упражнения и критерии)
+            stmt = (delete(Tasks).where(Tasks.id == id))
+            await self.session.execute(stmt)
             await self.session.commit()
 
             return JSONResponse(
@@ -172,5 +237,85 @@ class ServiceTasks(ServiceBase):
 
         except Exception as exc:
             logger.exception(exc)
+            await self.session.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    async def get_filters(self, teacher: Users) -> TasksFiltersReadSchema:
+        """
+        Получение доступных фильтров для учителя: список предметов и задач
+        """
+        if teacher.role is RoleUser.student:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="User don't have permission to get filters"
+            )
+
+        repo = RepoTasks(self.session)
+        rows = await repo.get_filters(teacher.id)
+
+        # Преобразуем данные в объекты схемы
+        subjects_list = [
+            SubjectFilterItem(id=row["subject_id"], name=row["subject_name"])
+            for row in rows["subjects"]
+        ]
+        tasks_list = [
+            TaskFilterItem(id=row["task_id"], name=row["task_name"])
+            for row in rows["tasks"]
+        ]
+
+        # Возвращаем схему с валидированными данными
+        return TasksFiltersReadSchema(
+            subjects=subjects_list,
+            tasks=tasks_list
+        )
+
+async def orm_to_exercise_read(exercise_orm: Exercises) -> ExerciseRead:
+    # Получаем presigned URLs для файлов
+    files: list[IFile] = []
+    if exercise_orm.files:
+        for key in exercise_orm.files:
+            try:
+                presigned_url = await get_presigned_url(key)
+                files.append(IFile(key=key, file=presigned_url))
+            except Exception as exc:
+                logger.warning(f"Failed to get presigned URL for file {key}: {exc}")
+
+    # Преобразуем Criterions → CriterionRead
+    criterions: list[CriterionRead] = [
+        CriterionRead(
+            id=crit.id,
+            name=crit.name,
+            score=crit.score,
+            exercise_id=crit.exercise_id
+        )
+        for crit in exercise_orm.criterions
+    ]
+
+    return ExerciseRead(
+        id=exercise_orm.id,
+        name=exercise_orm.name,
+        description=exercise_orm.description,
+        order_index=exercise_orm.order_index,
+        task_id=exercise_orm.task_id,
+        criterions=criterions,
+        files=files
+    )
+
+async def orm_to_task_read(task_orm: Tasks) -> TaskRead:
+    # Асинхронно преобразуем все упражнения
+    exercises: list[ExerciseRead] = await asyncio.gather(
+        *[orm_to_exercise_read(ex) for ex in task_orm.exercises]
+    )
+
+    return TaskRead(
+        id=task_orm.id,
+        name=task_orm.name,
+        description=task_orm.description,
+        deadline=task_orm.deadline,
+        subject_id=task_orm.subject_id,
+        teacher_id=task_orm.teacher_id,
+        updated_at=task_orm.updated_at,
+        created_at=task_orm.created_at,
+        exercises=exercises
+    )
 

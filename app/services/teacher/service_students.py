@@ -9,29 +9,38 @@ from app.repositories.repo_user import RepoUser
 from app.repositories.teacher.repo_students import RepoStudents
 
 from app.exceptions.responses import ErrorRolePermissionDenied
+from app.schemas.schema_students import (
+    FilterStudents,
+    StudentsPageResponse, 
+    StudentsReadSchemaTeacher,
+    StudentFilterItem,
+    ClassroomFilterItem
+)
 from app.utils.logger import logger
 from app.services.service_base import ServiceBase
 
 
 
-
 class ServiceStudents(ServiceBase):
 
-
-    async def get_all(self, user: Users):
-        if user.role != RoleUser.teacher:
+    async def get_all(self, filters: FilterStudents | None, teacher: Users):
+        if teacher.role != RoleUser.teacher:
             raise ErrorRolePermissionDenied(RoleUser.teacher)
 
+
         students_repo = RepoStudents(self.session)
-        students = await students_repo.get_all(user)
+
+        students = await students_repo.get_single_students(filters, teacher)
 
         classrooms_repo = RepoClassroom(self.session)
-        classrooms = await classrooms_repo.get_teacher_classrooms(user.id)
 
-        return {
-           "students": students,
-           "classrooms": classrooms
-        }
+        classrooms = await classrooms_repo.get_teacher_classrooms(filters, teacher.id)
+
+        return StudentsPageResponse(
+          classrooms=classrooms,
+          single_students=students
+        )
+
 
 
     async def get_performans_data(self, student_id: uuid.UUID, user: Users):
@@ -58,11 +67,7 @@ class ServiceStudents(ServiceBase):
                 raise ErrorRolePermissionDenied(RoleUser.teacher)
             
             repo = RepoStudents(self.session)
-            if not await repo.exists(user.id, student_id):
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Студент не найден"
-                )
+
             if await repo.user_exists_in_class(user.id, student_id, classroom_id):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -146,8 +151,44 @@ class ServiceStudents(ServiceBase):
             {"status": "ok"},
             status.HTTP_201_CREATED
         )
-        
-        
-        
+
+    async def get_filters(self, user: Users) -> StudentsReadSchemaTeacher:
+        """
+        Получение доступных фильтров для учителя: список студентов и классов
+        """
+        if user.role != RoleUser.teacher:
+            raise ErrorRolePermissionDenied(RoleUser.teacher)
+
+        repo = RepoStudents(self.session)
+        rows = await repo.get_filters(user.id)
+
+        # Формируем ответ с уникальными значениями
+        students_set = set()
+        classrooms_set = set()
+
+        for row in rows:
+            # Добавляем студентов (id, name) в set для уникальности
+            if row["student_id"]:
+                students_set.add((row["student_id"], row["student_name"]))
             
+            # Добавляем классы (id, name) в set для уникальности
+            if row["classroom_id"]:
+                classrooms_set.add((row["classroom_id"], row["classroom_name"]))
+
+        # Преобразуем sets в списки объектов схемы
+        students_list = [
+            StudentFilterItem(id=item[0], name=item[1]) 
+            for item in students_set
+        ]
+        classrooms_list = [
+            ClassroomFilterItem(id=item[0], name=item[1]) 
+            for item in classrooms_set
+        ]
+
+        # Возвращаем схему с валидированными данными
+        return StudentsReadSchemaTeacher(
+            students=students_list,
+            classrooms=classrooms_list
+        )
+        
             

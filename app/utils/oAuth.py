@@ -1,17 +1,34 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from jose import ExpiredSignatureError, jwt, JWTError
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, Request, status, Depends
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.model_users import Users
 from app.repositories.repo_user import RepoUser
 from app.config.config_app import settings
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.schemas.schema_auth import UserRead
 
 
+class OAuth2PasswordBearerWithCookie(OAuth2PasswordBearer):
+    async def __call__(self, request: Request) -> Optional[str]:
+        # 1. Пытаемся достать токен из Cookies
+        token: str = request.cookies.get("session")
+        # 2. Если в куках нет, ищем в заголовках (для Swagger)
+        if not token:
+            # Вызываем родительский метод, который умеет работать с Header Authorization
+            token = await super().__call__(request)
+            
+        if not token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return token
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearerWithCookie(tokenUrl="/auth/login")
 
 def create_access_token(data: dict, key: str, expires_delta: timedelta | None = None):
     to_encode = data.copy()
@@ -20,16 +37,8 @@ def create_access_token(data: dict, key: str, expires_delta: timedelta | None = 
     return jwt.encode(to_encode, key, algorithm=settings.ALGORITHM)
 
 def decode_token(token: str, key: str, algorithms=[settings.ALGORITHM]):
-    if not token.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token format (expected 'Bearer <token>')"
-        )
-
-    jwt_token = token.split("Bearer ")[1]
-
     try:
-        payload = jwt.decode(token=jwt_token, key=key, algorithms=algorithms)
+        payload = jwt.decode(token, key, algorithms)
         return payload
 
     except ExpiredSignatureError:

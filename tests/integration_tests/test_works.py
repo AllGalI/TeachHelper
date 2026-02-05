@@ -5,13 +5,14 @@ import pytest
 import pytest_asyncio
 
 from app.config.config_app import settings
-from app.db import AsyncSessionLocal
+from app.config.db import AsyncSessionLocal
 from app.models.model_tasks import Criterions, Exercises, Tasks
 from app.models.model_users import Users
 from fastapi import HTTPException
 
 from app.models.model_works import StatusWork, Works
-from app.services.service_work import ServiceWork, WorkUpdate
+from app.services.service_work import ServiceWork
+from app.schemas.schema_work import WorkUpdate
 from app.exceptions.responses import Success
 from app.utils.oAuth import create_access_token
 from app.schemas.schema_files import FileSchema

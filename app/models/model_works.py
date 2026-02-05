@@ -2,7 +2,7 @@ from datetime import datetime
 import enum
 import uuid
 
-from sqlalchemy import UUID, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Table
+from sqlalchemy import UUID, Boolean, Column, DateTime, Enum, ForeignKey, Integer, String, Table, func
 from app.models.base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -10,8 +10,9 @@ class StatusWork(str, enum.Enum):
     draft        = "draft"
     inProgress   = "inProgress"
     verification = "verification"
-    verificated  = "verificated"
+    verified     = "verified"
     canceled     = "canceled"
+
 
 class Assessments(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
@@ -29,17 +30,17 @@ class Answers(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, index=True, default=uuid.uuid4)
     work_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("works.id", ondelete="CASCADE"), nullable=False)
     exercise_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="CASCADE"))
+    text: Mapped[str] = mapped_column(String, default='')
     general_comment: Mapped[str] = mapped_column(String, default='')
-
-    files: Mapped[list["Files"]] = relationship(
-        "Files",
-        secondary="answers_files",
-        backref="answer",
-        cascade="all, delete-orphan",
-        single_parent=True
+    files: Mapped[list["AnswerFiles"]] = relationship(
+      "AnswerFiles",
+      backref="answer",
+      cascade="all, delete-orphan",
+      passive_deletes=True
     )
 
     exercise: Mapped["Exercises"] = relationship("Exercises", backref="answer")
+
     work: Mapped["Works"] = relationship("Works", back_populates="answers")
     assessments: Mapped[list["Assessments"]] = relationship(
         "Assessments",
@@ -62,8 +63,10 @@ class Works(Base):
     student_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     finish_date: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     status: Mapped[StatusWork] = mapped_column(Enum(StatusWork), default=StatusWork.draft, nullable=False)
-    сonclusion: Mapped[str] = mapped_column(String, nullable=True)
-    ai_verificated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    conclusion: Mapped[str] = mapped_column(String, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     answers: Mapped[list["Answers"]] = relationship(
         "Answers",
@@ -72,6 +75,8 @@ class Works(Base):
         passive_deletes=True,
 
     )
+
+
 
 
 

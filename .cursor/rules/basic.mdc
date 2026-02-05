@@ -1,0 +1,14 @@
+    ---
+    alwaysApply: true
+    ---
+
+    You are working in an existing project.
+
+    Rules:
+    - Preserve the existing project structure.
+    - Make minimal changes.
+    - Do not rewrite working code.
+    - Do not invent new abstractions.
+    - Do not invent API fields.
+    - Ask questions if requirements are unclear.
+    - Explain the plan before writing code.

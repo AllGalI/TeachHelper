@@ -1,18 +1,10 @@
 import uuid
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import select
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.db import get_async_session
-from app.exceptions.responses import Success
-from app.models.model_files import FileEntity
-from app.models.model_tasks import Tasks
+from app.config.db import get_async_session
 from app.models.model_users import Users
-from app.models.model_works import Answers, Assessments, Works
 from app.services.service_assessments import ServiceAssessments
-from app.services.service_comments import ServiceComments
-from app.services.service_files import ServiceFiles
 from app.utils.oAuth import get_current_user
 
 

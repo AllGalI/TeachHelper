@@ -1,11 +1,11 @@
 import uuid
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import EmailStr
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.security import OAuth2PasswordRequestForm
-from app.db import get_async_session
+from app.config.db import get_async_session
 from app.models.model_users import Users
-from app.schemas.schema_auth import UserRegister, UserRead, UserToken, UserResetPassword
+from app.schemas.schema_auth import ConfirmReset, EmailBodyDTO, CodeDTO, UserRegister, UserRead, UserResetPassword
 from app.services.service_auth import ServiceAuth
 from app.utils.oAuth import get_current_user
 
@@ -17,36 +17,57 @@ async def register(user: UserRegister, session: AsyncSession = Depends(get_async
     service = ServiceAuth(session)
     return await service.register(user)
 
-@router.post("/login", response_model=UserToken)
+@router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
     return await service.login(form_data)
 
-@router.post("/send_email_confirmation_link")
-async def send_email_confirmation_link(email: EmailStr, session: AsyncSession = Depends(get_async_session)):
+@router.post("/send_code")
+async def send_code(data: EmailBodyDTO, session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
-    return await service.send_email_confirmation_link(email)
+    return await service.send_code(data)
 
 @router.post("/confirm_email")
-async def confirm_email(token: str, session: AsyncSession = Depends(get_async_session)):
+async def confirm_email(data: CodeDTO, session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
-    return await service.confirm_email(token)   
+    return await service.confirm_email(data)
 
 @router.post("/forgot_password")
-async def forgot_password(email: EmailStr, session: AsyncSession = Depends(get_async_session)):
+async def forgot_password(email: EmailBodyDTO, session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
     return await service.forgot_password(email)
 
-@router.post("/reset_password")
-async def reset_password(reset_data: UserResetPassword, session: AsyncSession = Depends(get_async_session)):
+@router.post("/confirm_reset")
+async def forgot_password(data: ConfirmReset, session: AsyncSession = Depends(get_async_session)):
     service = ServiceAuth(session)
-    return await service.reset_password(reset_data=reset_data)
+    return await service.confirm_reset(data)
+
+@router.post("/reset_password")
+async def reset_password(data: UserResetPassword, session: AsyncSession = Depends(get_async_session)):
+    service = ServiceAuth(session)
+    return await service.reset_password(data)
 
 @router.get("/me", response_model=UserRead)
-async def me(current_user: Users = Depends(get_current_user)):
-    return UserRead.model_validate(current_user)
+async def me(
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user),
+):
+    """Текущий пользователь с информацией о подписке."""
+    service = ServiceAuth(session)
+    return await service.get_me(current_user)
 
 @router.delete("/{id}")
 async def delete(id: uuid.UUID, email: EmailStr, session: AsyncSession = Depends(get_async_session), current_user: Users = Depends(get_current_user)):
     service = ServiceAuth(session)
     return await service.delete(email, id)
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie(
+        "session", 
+        httponly=True, 
+        samesite="lax", 
+        secure=True # должно совпадать с тем, как создавали
+    )
+    return {"detail": "Logged out"}

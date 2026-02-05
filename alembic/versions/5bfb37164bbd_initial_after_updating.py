@@ -130,7 +130,7 @@ def upgrade() -> None:
     sa.Column('student_id', sa.UUID(), nullable=False),
     sa.Column('finish_date', sa.DateTime(), nullable=True),
     sa.Column('status', sa.Enum('draft', 'inProgress', 'verification', 'verificated', 'canceled', name='statuswork'), nullable=False),
-    sa.Column('сonclusion', sa.String(), nullable=True),
+    sa.Column('conclusion', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['student_id'], ['users.id'], ondelete='CASCADE'),

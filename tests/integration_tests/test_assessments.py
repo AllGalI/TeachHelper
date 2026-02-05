@@ -37,7 +37,6 @@ async def test_assessments_update(
         headers={"Authorization": token},
         params={"points": points},
     )
-    print(response.json())
 
     assert response.status_code == expected_status
 

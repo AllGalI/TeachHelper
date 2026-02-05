@@ -1,56 +1,131 @@
 import uuid
+import aio_pika
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 
+from app.config.config_app import settings
 from app.exceptions.responses import *
 from app.models.model_comments import Comments, Coordinates
+from app.models.model_files import AnswerFiles, StatusAnswerFile
 from app.models.model_users import RoleUser, Users
+
 from app.models.model_works import Answers, Works
-from app.schemas.schema_comment import AICommentDTO, CommentUpdate
+from app.schemas.schema_AI import SchemaIncomingBack, SchemaOutgoing
+from app.schemas.schema_comment import CommentCreate, CommentUpdate
+from app.schemas.schema_files import compare_lists
+from app.config.boto import delete_files_from_s3
+from app.models.model_subscription import Subscriptions
+from app.models.model_tasks import Tasks
+from app.repositories.repo_subscription import RepoSubscription
 from app.utils.logger import logger
 from app.services.service_base import ServiceBase
 
 
 class ServiceComments(ServiceBase):
 
-    async def ai_create(
+    async def send_to_ai_processing(self, data: SchemaIncomingBack, teacher: Users):
+        """
+        Отправляет полные данные на AI-обработку через RabbitMQ.
+        Проверки прав доступа уже выполнены в ServiceAI.ai_verification.
+        
+        Args:
+            data: Полные данные для отправки на AI-обработку (SchemaIncomingBack)
+            teacher: Текущий учитель (для логирования/аудита)
+            
+        Returns:
+            Success при успешной отправке
+        """
+        connection = await aio_pika.connect_robust(settings.pika_url)
+        async with connection:
+            channel = await connection.channel()
+
+            await channel.default_exchange.publish(
+                aio_pika.Message(body=data.model_dump_json().encode()),
+                routing_key=settings.PIKA_INCOMING_QUEUE
+            )
+        await self.session.commit()
+        return Success()
+
+    async def save_ai_results(
         self,
-        work_id: uuid.UUID,
-        comments: list[AICommentDTO],
-        user: Users,
+        data: SchemaOutgoing
     ):
         try:
-            if user.role is not RoleUser.admin:
-                logger.exception(f"User: {user.id}, tried to create ai_comment")
-                raise ErrorPermissionDenied()
-            """
-            Добавить пользователся HtrClient и дать ему возможность создавать комментарии
-            """
-            orm_comments: list[Comments] = []
-            for comment in comments:
-                comment_orm = Comments(
-                    answer_id=comment.answer_id,
-                    answer_file_id=comment.image_file_id,
-                    description=comment.description,
-                    type_id=comment.type_id,
-                    human=False,
-                )
+            # Определяем teacher_id по первому ответу: answer -> work -> task -> teacher_id
+            first_answer_id = data.answers[0].id
+            stmt_work = (
+                select(Works)
+                .join(Answers, Works.id == Answers.work_id)
+                .where(Answers.id == first_answer_id)
+            )
+            result_work = await self.session.execute(stmt_work)
+            work = result_work.scalar_one_or_none()
+            if work is not None:
+                task = await self.session.get(Tasks, work.task_id)
+                if task is not None:
+                    repo_subscription = RepoSubscription(self.session)
+                    subscription = await repo_subscription.get_by_user_id_any(task.teacher_id)
+                    if subscription is not None:
+                        # Считаем забаненные фото в ответе AI
+                        banned_count = sum(
+                            1
+                            for answer in data.answers
+                            for a_file in answer.files
+                            if a_file.ai_status == StatusAnswerFile.banned
+                        )
+                        if banned_count > 0:
+                            subscription.used_checks = max(
+                                0,
+                                subscription.used_checks - banned_count,
+                            )
+                            await self.session.flush()
 
-                for coordinate in comment.coordinates:
-                    comment_orm.coordinates.append(Coordinates(
-                        x1=coordinate.x1,
-                        y1=coordinate.y1,
-                        x2=coordinate.x2,
-                        y2=coordinate.y2,
-                    ))
-                orm_comments.append(comment_orm)
-            
-            self.session.add_all(orm_comments)
-            work_db = await self.session.get(Works, work_id)
-            work_db.ai_verificated = True
+            for answer in data.answers:
+                orm_comments: list[Comments] = []
+                for comment in answer.comments:
+                    comment_orm = Comments(
+                        answer_id=comment.answer_id,
+                        answerfile_id=comment.answerfile_id,
+                        description=comment.description,
+                        type_id=comment.type_id,
+                        human=False,
+                    )
 
-            await self.session.commit()
+                    for coordinate in comment.coordinates:
+                        comment_orm.coordinates.append(Coordinates(
+                            x1=coordinate.x1,
+                            y1=coordinate.y1,
+                            x2=coordinate.x2,
+                            y2=coordinate.y2,
+                        ))
+                    orm_comments.append(comment_orm)
+                self.session.add_all(orm_comments)
+
+                # Обрабатываем файлы: обновляем существующие или создаём новые
+                for a_file in answer.files:
+                    # Проверяем, существует ли файл с таким id в БД
+                    existing_file = await self.session.get(AnswerFiles, a_file.id)
+                    
+                    if existing_file:
+                        # Файл существует - обновляем его статус
+                        existing_file.ai_status = a_file.ai_status
+                        # Обновляем ключ, если он изменился
+                        if existing_file.key != a_file.key:
+                            existing_file.key = a_file.key
+                    else:
+                        # Файл не существует - создаём новый
+                        new_file = AnswerFiles(
+                            id=a_file.id,
+                            answer_id=answer.id,
+                            key=a_file.key,
+                            ai_status=a_file.ai_status,
+                        )
+                        self.session.add(new_file)
+                
+
+                await self.session.commit()
+
             return Success()
 
         except HTTPException:
@@ -64,29 +139,31 @@ class ServiceComments(ServiceBase):
 
     async def create(
         self,
-        answer_id: uuid.UUID,
-        comments: list[AICommentDTO],
+        comment: CommentCreate,
         user: Users,
     ):
         try:
             if user.role is RoleUser.student:
                 raise ErrorRolePermissionDenied(RoleUser.teacher, user.role)
-            """
-            Добавить пользователся HtrClient и дать ему возможность создавать комментарии
-            """
-            orm_comments: list[Comments] = []
 
-            for comment in comments:
-                comment_orm = Comments(
-                    answer_id=answer_id,
-                    answer_file_id=comment.image_file_id,
-                    description=comment.description,
-                    type_id=comment.type_id,
-                    human=True,
-                )
-                comment_orm.coordinates.extend(comment.coordinates)
+            comment_orm = Comments(
+                answer_id=comment.answer_id,
+                answerfile_id=comment.answerfile_id,
+                description=comment.description,
+                type_id=comment.type_id,
+                human=comment.human,
+                files=comment.files
+            )
 
-            self.session.add_all(orm_comments)
+            comment_orm.coordinates.extend(
+              Coordinates(
+                x1=coordinate.x1,
+                y1=coordinate.y1,
+                x2=coordinate.x2,
+                y2=coordinate.y2,
+              ) for coordinate in comment.coordinates)
+
+            self.session.add(comment_orm)
             await self.session.commit()
             return Success()
 
@@ -99,6 +176,14 @@ class ServiceComments(ServiceBase):
             raise HTTPException(status_code=500, detail="Internal Server Error")
 
     async def update(self, comment_id: uuid.UUID, update_data: CommentUpdate, user: Users):
+        """
+        Обновление комментария с обработкой файлов.
+        
+        При обновлении файлов:
+        1. Сравнивается старый и новый список файлов
+        2. Удаленные файлы автоматически удаляются из S3
+        3. Обновляется список файлов в базе данных
+        """
         try:
             if user.role is RoleUser.student:
                 raise ErrorRolePermissionDenied(RoleUser.teacher, RoleUser.student)
@@ -107,10 +192,29 @@ class ServiceComments(ServiceBase):
             if comment_db is None:
                 raise ErrorNotExists(Comments)
 
-            update_payload = update_data.model_dump(exclude_unset=True)  # обновляем только переданные поля, остальное не трогаем
+            # Обрабатываем файлы отдельно, если они переданы
+            files_to_delete = []
+            if update_data.files is not None:
+                # Сравниваем старый и новый список файлов
+                old_files = comment_db.files if comment_db.files else []
+                file_changes = compare_lists(old_files, update_data.files)
+                files_to_delete = file_changes['removed']
+                # Обновляем список файлов
+                comment_db.files = update_data.files
+
+            # Обновляем остальные поля (type_id, description)
+            update_payload = update_data.model_dump(exclude_unset=True, exclude={'files'})  # исключаем files, т.к. уже обработали
             for key, value in update_payload.items():
                 if hasattr(comment_db, key):
                     setattr(comment_db, key, value)
+
+            # Удаляем файлы из S3, если есть удаленные
+            if files_to_delete:
+                try:
+                    await delete_files_from_s3(files_to_delete)
+                except Exception as s3_exc:
+                    # Логируем ошибку, но продолжаем обновление комментария
+                    logger.warning(f"Failed to delete files from S3: {s3_exc}")
 
             await self.session.commit()
             return JSONResponse(
