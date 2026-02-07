@@ -11,22 +11,39 @@ services:
       - db
       - minio
       - rabbitmq
+     
+    deploy:
+      resources:
+        limits:
+          memory: 512M
 
     volumes:
       - .:/app
 
-  save_ai_comments_consumer:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: save_ai_comments_consumer
-    restart: always
+  celery_worker:
+    build: .
     env_file:
       - .env
-    command: python -m app.external_services.save_ai_comments_consumer
-    depends_on:
-      - db
-      - rabbitmq
+    container_name: mail_worker
+    command: celery -A app.workers.mail_worker.celery_app worker --loglevel=info -c 1 --max-tasks-per-child=10
+
+    deploy:
+        resources:
+          limits:
+            memory: 512M
+
+  # save_ai_comments_consumer:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: save_ai_comments_consumer
+  #   restart: always
+  #   env_file:
+  #     - .env
+  #   command: python -m app.external_services.save_ai_comments_consumer
+  #   depends_on:
+  #     - db
+  #     - rabbitmq
 
   db:
     image: postgres:15
@@ -43,26 +60,26 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
-  rabbitmq:
-    image: rabbitmq:4.2.0-management-alpine
-    container_name: rabbitmq
-    restart: always
-    env_file:
-      - .env
-    environment:
-      RABBITMQ_DEFAULT_USER: ${PIKA_USER}
-      RABBITMQ_DEFAULT_PASS: ${PIKA_PASSWORD}
-    ports:
-      - "${PIKA_PORT}:5672"
-      - "15672:15672"
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq/mnesia
+  # rabbitmq:
+  #   image: rabbitmq:4.2.0-management-alpine
+  #   container_name: rabbitmq
+  #   restart: always
+  #   env_file:
+  #     - .env
+  #   environment:
+  #     RABBITMQ_DEFAULT_USER: ${PIKA_USER}
+  #     RABBITMQ_DEFAULT_PASS: ${PIKA_PASSWORD}
+  #   ports:
+  #     - "${PIKA_PORT}:5672"
+  #     - "15672:15672"
+  #   volumes:
+  #     - rabbitmq_data:/var/lib/rabbitmq/mnesia
 
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  #   healthcheck:
+  #     test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 5
 
   redis:
     image: redis:8.4.0-alpine

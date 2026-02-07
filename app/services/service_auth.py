@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from jose import ExpiredSignatureError, jwt, JWTError
 
 from app.config.config_app import settings
+from app.exceptions.responses import Success
 from app.models.model_users import Users
 from app.models.model_subscription import Subscriptions, Plans
 from app.repositories.repo_user import RepoUser
@@ -25,6 +26,8 @@ from app.services.service_base import ServiceBase
 from app.utils.logger import logger
 from app.config.redis import red_client
 from datetime import datetime, timedelta, timezone
+
+from app.workers.mail_worker import send_email
 
 class ServiceAuth(ServiceBase):
     def __init__(self, session: AsyncSession):
@@ -140,9 +143,9 @@ class ServiceAuth(ServiceBase):
 
             code = randint(1000, 9999)
             red_client.set(data.email, code, ex=60)        
-            await ServiceMail.send_mail_async(data.email, "Подтверждение почты", "template_verification_code.html", {"code": code})
+            send_email(data.email, "Подтверждение почты", "template_verification_code.html", {"code": code})
 
-            return {"message": "Письмо отправлено"}
+            return Success()
 
         except HTTPException as exc:
             await self.session.rollback()
@@ -164,12 +167,11 @@ class ServiceAuth(ServiceBase):
             if user.is_verificated:
                 raise HTTPException(status.HTTP_409_CONFLICT, detail="Почта уже подтверждена")
 
-            # code = str(red_client.get(data.email))
-            # if code == "None":
-            #   raise HTTPException(status.HTTP_400_BAD_REQUEST, "Код подтверждения просрочился, отправтье новый")
-
-            if '1111' != data.code:
-            # if code != data.code:
+            code = str(red_client.get(data.email))
+            if code == "None":
+              raise HTTPException(status.HTTP_400_BAD_REQUEST, "Код подтверждения просрочился, отправтье новый")
+            print(code)
+            if code != data.code:
               raise HTTPException(status.HTTP_403_FORBIDDEN, "Неверный код")
 
             repo = RepoUser(self.session)
@@ -257,7 +259,7 @@ class ServiceAuth(ServiceBase):
 
             code = randint(1000, 9999)
             red_client.set(data.email, code, ex=100)        
-            await ServiceMail.send_mail_async(data.email, "Сброс пароля", "template_reset_password.html", {"name": user.first_name, "code": code})
+            send_email(data.email, "Сброс пароля", "template_reset_password.html", {"name": user.first_name, "code": code})
 
             return {"message": "Письмо отправлено"}
 

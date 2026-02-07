@@ -1,5 +1,6 @@
+import time
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 
@@ -27,7 +28,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="RU-Lang MVP API",
-        root_path="/api"
+        root_path='/api'
     )
     # Настройка CORS из переменных окружения
 
@@ -39,6 +40,21 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    
+    @app.middleware("http")
+    async def log_requests(request: Request, call_next):
+        # Логируем детали запроса
+        print(f"--- New Request ---")
+        print(f"Method: {request.method} Path: {request.url.path}")
+        print(f"Headers: {dict(request.headers)}") # Тут увидите X-Forwarded-Prefix
+        print(f"Root Path: {request.scope.get('root_path')}")
+        
+        start_time = time.time()
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        
+        print(f"Response status: {response.status_code} Time: {process_time:.4f}s")
+        return response
 
 
 
