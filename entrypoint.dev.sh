@@ -12,4 +12,4 @@ alembic upgrade head
 
 echo "🚀 Starting app"
 
-gunicorn -w 1 -k uvicorn.workers.UvicornWorker main:app --bind 0.0.0.0:8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000

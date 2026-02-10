@@ -135,7 +135,7 @@ class RepoStudents:
             insert(teachers_students)
             .values(teacher_id=teacher_id, student_id=student_id)
         )
-        res =  await self.session.execute(stmt)
+        await self.session.execute(stmt)
 
     async def get_filters(self, teacher_id: uuid.UUID):
         """

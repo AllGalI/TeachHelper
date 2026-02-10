@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 120
 
     FRONT_URL: str
+    HOST: str
     
     
     # MinIO

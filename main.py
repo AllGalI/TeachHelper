@@ -12,7 +12,6 @@ from app.routes.route_comments import router as router_comments
 from app.routes.route_exersices import router as router_exersices
 from app.routes.route_files import router as router_files
 from app.routes.route_students import router as router_students
-from app.routes.route_students import router2 as router_teachers
 from app.routes.route_subjects import router as router_subjects
 from app.routes.route_tasks import router as router_tasks
 from app.routes.route_works import router as router_works
@@ -67,7 +66,6 @@ def create_app() -> FastAPI:
     app.include_router(router_exersices)
     app.include_router(router_files)
     app.include_router(router_students)
-    app.include_router(router_teachers)
     app.include_router(router_subjects)
     app.include_router(router_comment_types)
     app.include_router(router_tasks)

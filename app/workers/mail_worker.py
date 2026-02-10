@@ -2,7 +2,6 @@ from celery import Celery
 
 import smtplib
 from email.message import EmailMessage
-from pydantic import EmailStr
 
 import os
 from dotenv import load_dotenv
@@ -17,21 +16,29 @@ app = Celery('my_tasks',
              backend='redis://redis:6379/0')
 
 @app.task
-def send_email(to_email: EmailStr, subject: str, template_name: str, context: dict):
-    # Рендерим html с подстановкой данных
+def send_email(to_email: str, subject: str, template_name: str, context: dict):
+    print("start send")
+    # 1. Рендерим HTML (убедись, что render_template тоже синхронная)
     html_content = render_template(template_name, context)
 
+    # 2. Формируем сообщение
     message = EmailMessage()
     message["From"] = os.getenv("SMTP_FROM")
     message["To"] = to_email
     message["Subject"] = subject
     message.set_content(html_content, subtype="html")
 
-    smtplib.send(
-        message,
-        hostname=os.getenv("SMTP_HOST"),
-        port=int(os.getenv("SMTP_PORT")),
-        start_tls=True,
-        username=os.getenv("SMTP_USERNAME"),
-        password=os.getenv("SMTP_PASSWORD"),
-    )
+    # 3. Отправка через SMTP-сессию
+    try:
+        # Используем контекстный менеджер with, чтобы соединение закрылось само
+        with smtplib.SMTP(os.getenv("SMTP_HOST"), int(os.getenv("SMTP_PORT"))) as server:
+            server.starttls()  # Включаем шифрование
+            server.login(os.getenv("SMTP_USERNAME"), os.getenv("SMTP_PASSWORD"))
+            server.send_message(message)
+            print({to_email})
+        return f"Email sent to {to_email}"
+    except Exception as e:
+        # Для Celery важно видеть ошибки, чтобы он мог переотправить задачу (retry)
+        print(f"Error sending email: {e}")
+        raise e
+

@@ -8,9 +8,14 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - db
-      - minio
-      - rabbitmq
+      db:
+        condition: service_healthy # Ждем полной готовности БД
+      redis:
+        condition: service_healthy # Ждем готовности Redis
+      minio:
+        condition: service_started
+      celery_worker:
+        condition: service_healthy
      
     deploy:
       resources:
@@ -25,25 +30,27 @@ services:
     env_file:
       - .env
     container_name: mail_worker
-    command: celery -A app.workers.mail_worker.celery_app worker --loglevel=info -c 1 --max-tasks-per-child=10
-
+    command: celery -A app.workers.mail_worker.app worker --loglevel=info -c 1 --max-tasks-per-child=10
     deploy:
         resources:
           limits:
             memory: 512M
+    healthcheck:
+      # Команда inspect ping проверяет, отвечает ли воркер на запросы брокера
+      test: ["CMD-SHELL", "celery -A app.workers.mail_worker.app inspect ping"]
+      interval: 1m
+      timeout: 15s
+      retries: 3
+      start_period: 30s
 
-  # save_ai_comments_consumer:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #   container_name: save_ai_comments_consumer
-  #   restart: always
-  #   env_file:
-  #     - .env
-  #   command: python -m app.external_services.save_ai_comments_consumer
-  #   depends_on:
-  #     - db
-  #     - rabbitmq
+  flower:
+    build: .
+    command: celery -A app.workers.mail_worker.app flower --port=5555 --url_prefix=flower
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
 
   db:
     image: postgres:15
@@ -59,27 +66,14 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    
+    healthcheck:
+      # pg_isready проверяет, принимает ли база подключения
+      test: ["CMD-SHELL", "pg_isready -U $$DATABASE_USER -d $$DATABASE_NAME"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # rabbitmq:
-  #   image: rabbitmq:4.2.0-management-alpine
-  #   container_name: rabbitmq
-  #   restart: always
-  #   env_file:
-  #     - .env
-  #   environment:
-  #     RABBITMQ_DEFAULT_USER: ${PIKA_USER}
-  #     RABBITMQ_DEFAULT_PASS: ${PIKA_PASSWORD}
-  #   ports:
-  #     - "${PIKA_PORT}:5672"
-  #     - "15672:15672"
-  #   volumes:
-  #     - rabbitmq_data:/var/lib/rabbitmq/mnesia
-
-  #   healthcheck:
-  #     test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 5
 
   redis:
     image: redis:8.4.0-alpine
@@ -93,7 +87,12 @@ services:
     ports:
       - "${REDIS_PORT}:6379"
     volumes:
-      - redis_data:/var/lib/redis/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio:latest
@@ -110,12 +109,11 @@ services:
       MINIO_API_CORS_ALLOW_ORIGIN: "*" 
     command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/var/lib/minio/data
+      - minio_data:/data
 
 
 volumes:
   pgdata:
-  rabbitmq_data:
   redis_data:
   minio_data:
 

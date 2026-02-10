@@ -2,6 +2,7 @@ import os
 from typing import Annotated
 import uuid
 from fastapi import APIRouter, Depends
+from pydantic import Field
 
 from app.config.config_app import settings
 from app.config.db import get_async_session
@@ -31,6 +32,26 @@ async def get_filters(
     """Получение доступных фильтров для списка студентов: список студентов и классов"""
     service = ServiceStudents(session)
     return await service.get_filters(current_user)
+
+    
+@router.get("/invite_link")
+async def get_link(
+    classroom_id: uuid.UUID | None = None,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user)
+    ):
+    service = ServiceStudents(session)
+    return service.get_invite_token(current_user, classroom_id)
+
+@router.post("/invite_link")
+async def handle_invite_link(
+    token: str,
+    session: AsyncSession = Depends(get_async_session),
+    current_user: Users = Depends(get_current_user)
+    ):
+    service = ServiceStudents(session)
+    return await service.handle_invite_link(token, current_user)
+    
 
 
 @router.get("/{id}")
@@ -74,21 +95,3 @@ async def delete(
     ):
     service = ServiceStudents(session)
     return await service.delete(student_id=id, user=current_user)
-
-router2 = APIRouter(prefix='/teachers', tags=["Teachers"])
-
-@router2.get("/invite_link")
-async def get_link(
-    current_user: Users = Depends(get_current_user)
-    ):
-    return {"link": f"{settings.FRONT_URL}/t/{current_user.id}"}
-    
-
-@router2.post("/{id}")
-async def add(
-    id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
-    student: Users = Depends(get_current_user)
-):
-    service = ServiceStudents(session)
-    return await service.add_teacher(id, student)

@@ -21,7 +21,6 @@ from app.utils.oAuth import create_access_token
 from app.utils.password import verify_password, get_password_hash
 from app.utils.email_hash import get_email_hash
 from fastapi.security import OAuth2PasswordRequestForm
-from app.services.service_mail import ServiceMail
 from app.services.service_base import ServiceBase
 from app.utils.logger import logger
 from app.config.redis import red_client
@@ -32,36 +31,35 @@ from app.workers.mail_worker import send_email
 class ServiceAuth(ServiceBase):
     def __init__(self, session: AsyncSession):
         super().__init__(session)
-        self.mail = ServiceMail()
 
 
     async def register(self, user: UserRegister):
         try:
             repo = RepoUser(self.session)
-            if await repo.email_exists(user.email):
+            user_db = await repo.email_exists(user.email)
+            if user_db is not None and user_db.is_verificated:
                 raise HTTPException(status.HTTP_409_CONFLICT, "User with this email already exists")
+            
+            if user_db:
+                user_db.email = user.email
+                user_db.first_name = user.first_name
+                user_db.last_name = user.last_name
+                user_db.password = get_password_hash(user.password)
+                user_db.role = user.role
+            else:
+                user_db = Users(
+                    email=user.email,
+                    first_name=user.first_name,
+                    last_name=user.last_name,
+                    password=get_password_hash(user.password),
+                    role=user.role,
+                )
+                self.session.add(user_db)
+                if hasattr(user_db, "subscription"):
+                    await self.session.refresh(user_db, ["subscription"])
 
-            user_db = Users(
-                email=user.email,
-                first_name=user.first_name,
-                last_name=user.last_name,
-                password=get_password_hash(user.password),
-                role=user.role,
-            )
-            self.session.add(user_db)
-            await self.session.flush([user_db])
-            # У нового пользователя подписки ещё нет (создаётся при confirm_email)
-            response = UserRead(
-                id=user_db.id,
-                first_name=user_db.first_name,
-                last_name=user_db.last_name,
-                email=user_db.email,
-                role=user_db.role,
-                is_verificated=user_db.is_verificated,
-                subscription=None,
-            )
             await self.session.commit()
-            return response
+            return UserRead.model_validate(user_db)
 
         except HTTPException as exc:
             await self.session.rollback()
@@ -142,8 +140,8 @@ class ServiceAuth(ServiceBase):
                 raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Письмо уже отправлено, попробуйте через минуту")
 
             code = randint(1000, 9999)
-            red_client.set(data.email, code, ex=60)        
-            send_email(data.email, "Подтверждение почты", "template_verification_code.html", {"code": code})
+            red_client.set(data.email, code, ex=60)
+            send_email.delay(data.email, "Подтверждение почты", "template_verification_code.html", {"code": code})
 
             return Success()
 
@@ -170,7 +168,7 @@ class ServiceAuth(ServiceBase):
             code = str(red_client.get(data.email))
             if code == "None":
               raise HTTPException(status.HTTP_400_BAD_REQUEST, "Код подтверждения просрочился, отправтье новый")
-            print(code)
+
             if code != data.code:
               raise HTTPException(status.HTTP_403_FORBIDDEN, "Неверный код")
 
@@ -207,11 +205,10 @@ class ServiceAuth(ServiceBase):
                 subscription = Subscriptions(
                     user_id=user.id,
                     plan_id=trial_plan.id,
-                    email_hash=email_hash,
-                    used_checks=0,
                     self_writing=False,
-                    started_at=started_at,
+                    used_checks=0,
                     finish_at=finish_at,
+                    started_at=started_at,
                 )
                 await repo_subscription.create(subscription)
             else:
@@ -259,7 +256,7 @@ class ServiceAuth(ServiceBase):
 
             code = randint(1000, 9999)
             red_client.set(data.email, code, ex=100)        
-            send_email(data.email, "Сброс пароля", "template_reset_password.html", {"name": user.first_name, "code": code})
+            send_email.delay(data.email, "Сброс пароля", "template_reset_password.html", {"name": user.first_name, "code": code})
 
             return {"message": "Письмо отправлено"}
 

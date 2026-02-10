@@ -2,6 +2,7 @@ from typing import Sequence, Optional
 import uuid
 from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.model_users import  Users
 
@@ -11,10 +12,10 @@ class RepoUser:
         self.session = session
   
     async def email_exists(self, email):
-        stmt = select(Users).where(Users.email == email)
+        stmt = select(Users).where(Users.email == email).options(selectinload(Users.subscription))
         response = await self.session.execute(stmt)
         result = response.scalar_one_or_none()
-        return result is not None
+        return result
 
     async def create(self, user: Users) -> Users:
         self.session.add(user)

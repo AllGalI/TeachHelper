@@ -60,3 +60,9 @@ class Users(Base):
         viewonly=True,  # Только для чтения, так как связь управляется через teachers_students
         overlaps="students,teachers",  # Указываем, что это relationship перекрывается с students и teachers
     )
+
+    subscription: Mapped["Subscriptions"] = relationship(
+        "Subscriptions",
+        back_populates="user",  # Связываем с отношением `user` в Subscriptions
+        uselist=False  # Так как у пользователя может быть только одна подписка
+    )

@@ -38,7 +38,7 @@ class Subscriptions(Base):
 
     user: Mapped["Users"] = relationship(
       "Users",
-      backref="subscription"
+      back_populates="subscription"
     )
 
     plan: Mapped["Plans"] = relationship(

@@ -66,7 +66,7 @@ async def get_upload_link_to_temp(original_filename: str) -> UploadFileResponse:
 
     return UploadFileResponse(
       key=new_filename,
-      upload_link=upload_link,
+      upload_link=make_link_local(upload_link),
     )
 
 async def get_object_photos(file_keys: list[str]):
@@ -91,7 +91,7 @@ async def get_presigned_url(filekey: str):
                 Params={'Bucket': settings.BUCKET, 'Key': filekey},
                 ExpiresIn=3600
             )
-            return url
+            return make_link_local(url)
     except Exception as e:
       print(f"Ошибка получения ссылки: {e}")
       raise e
@@ -108,3 +108,9 @@ async def delete_files_from_s3(file_keys: list[str]):
         except Exception as e:
             print(f"Ошибка удаления: {e}")
             raise e
+
+def make_link_local(link: str):
+    protocol = link.split('://')[0]
+    path = link.split('://')[1].split(":9000")[1]
+    return protocol + "://" + settings.HOST + ":9000" + path
+    

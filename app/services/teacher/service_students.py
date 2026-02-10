@@ -1,14 +1,18 @@
+import json
 import uuid
+import secrets
 from fastapi import status, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.config_app import settings
 from app.models.model_users import RoleUser, Users
 from app.repositories.repo_classrooms import RepoClassroom
 from app.repositories.repo_user import RepoUser
 from app.repositories.teacher.repo_students import RepoStudents
+from app.config.redis import red_client
 
-from app.exceptions.responses import ErrorRolePermissionDenied
+from app.exceptions.responses import ErrorRolePermissionDenied, Success
 from app.schemas.schema_students import (
     FilterStudents,
     StudentsPageResponse, 
@@ -147,10 +151,7 @@ class ServiceStudents(ServiceBase):
         repo = RepoStudents(self.session)
         await repo.add_teacher(teacher_id, student.id)
         await self.session.commit()
-        return JSONResponse(
-            {"status": "ok"},
-            status.HTTP_201_CREATED
-        )
+        return Success()
 
     async def get_filters(self, user: Users) -> StudentsReadSchemaTeacher:
         """
@@ -191,4 +192,46 @@ class ServiceStudents(ServiceBase):
             classrooms=classrooms_list
         )
         
-            
+    def get_invite_token(self, teacher: Users, classroom_id: uuid.UUID | None = None):
+        if teacher.role is RoleUser.student:
+            raise ErrorRolePermissionDenied(RoleUser.teacher, RoleUser.student)
+
+        token = token = secrets.token_urlsafe(32)
+        data = {"teacher_id": str(teacher.id)}
+        if classroom_id is not None:
+            data['classroom_id'] = str(classroom_id)
+        
+        red_client.set(token, json.dumps(data), 144000)
+
+        return token
+
+    async def handle_invite_link(self, token: str, student: Users):
+        if student.role == RoleUser.teacher:
+            raise ErrorRolePermissionDenied(RoleUser.student, RoleUser.teacher)
+
+        data = json.loads(red_client.get(token))
+        if not data:
+            raise HTTPException(status_code=404, detail="Ссылка больше не работает")
+
+        teacher_id = data.get("teacher_id")
+        classroom_id = data.get("classroom_id")
+
+        repo_user = RepoUser(self.session)
+        if await repo_user.get(teacher_id) is  None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Teacher is not exists")
+
+        repo = RepoStudents(self.session)
+        await repo.add_teacher(teacher_id, student.id)
+        await self.session.flush()
+
+        if classroom_id:
+            if await repo.user_exists_in_class(teacher_id, student.id, classroom_id):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Студент уже находится в этом классе"
+                )
+            await repo.move_to_class(teacher_id, student.id, classroom_id)
+
+        await self.session.commit()
+        return Success()
+        
