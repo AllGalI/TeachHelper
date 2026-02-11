@@ -24,6 +24,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from app.services.service_base import ServiceBase
 from app.utils.logger import logger
 from app.config.redis import red_client
+from app.config.celery import celery_app
 from datetime import datetime, timedelta, timezone
 
 from app.workers.mail_worker import send_email
@@ -142,8 +143,15 @@ class ServiceAuth(ServiceBase):
 
             code = randint(1000, 9999)
             red_client.set(data.email, code, ex=60)
-            send_email.delay(data.email, "Подтверждение почты", "template_verification_code.html", {"code": code})
-
+            celery_app.send_task(
+                'tasks.send_email',
+                kwargs={
+                    "to_email": data.email,
+                    "subject": "Подтверждение почты",
+                    "template_name": "template_verification_code.html",
+                    "context": {"name": user.first_name, "code": code}
+                }
+            )
             return Success()
 
         except HTTPException as exc:
@@ -256,8 +264,16 @@ class ServiceAuth(ServiceBase):
                 raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Письмо уже отправлено, попробуйте через минуту")
 
             code = randint(1000, 9999)
-            red_client.set(data.email, code, ex=100)        
-            send_email.delay(data.email, "Сброс пароля", "template_reset_password.html", {"name": user.first_name, "code": code})
+            red_client.set(data.email, code, ex=100)
+            celery_app.send_task(
+                'tasks.send_email',
+                kwargs={
+                    "to_email": data.email,
+                    "subject": "Сброс пароля",
+                    "template_name": "template_reset_password.html",
+                    "context": {"name": user.first_name, "code": code}
+                }
+            )
 
             return {"message": "Письмо отправлено"}
 

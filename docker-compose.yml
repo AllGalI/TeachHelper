@@ -14,8 +14,8 @@ services:
         condition: service_healthy # Ждем готовности Redis
       minio:
         condition: service_started
-      # mail_worker:
-      #   condition: service_healthy
+      htr_listener:
+        condition: service_healthy
      
     deploy:
       resources:
@@ -25,31 +25,29 @@ services:
     volumes:
       - .:/app-code
 
-  # mail_worker:
-  #   build: .
-  #   env_file:
-  #     - .env
-  #   container_name: mail_worker
-  #   command: celery -A app.workers.mail_worker.app worker --loglevel=info -c 1 --max-tasks-per-child=10
-  #   ports:
-  #     - "8001:8001"
-  #   deploy:
-  #       resources:
-  #         limits:
-  #           memory: 512M
-  #   extra_hosts:
-  #     - "host.docker.internal:host-gateway"
-  #   healthcheck:
-  #     # Команда inspect ping проверяет, отвечает ли воркер на запросы брокера
-  #     test: ["CMD-SHELL", "celery -A app.workers.mail_worker.app inspect ping"]
-  #     interval: 1m
-  #     timeout: 15s
-  #     retries: 3
-  #     start_period: 30s
+  htr_listener:
+    build: .
+    env_file:
+      - .env
+    container_name: htr_listener
+    command: celery -A app.config.celery.celery_worker worker --loglevel=info -c 1 --max-tasks-per-child=10
+    deploy:
+        resources:
+          limits:
+            memory: 512M
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      # Команда inspect ping проверяет, отвечает ли воркер на запросы брокера
+      test: ["CMD-SHELL", "celery -A app.config.celery.celery_worker inspect ping"]
+      interval: 1m
+      timeout: 15s
+      retries: 3
+      start_period: 30s
 
   flower:
     build: .
-    command: celery -A app.workers.mail_worker.app flower --port=5555 --url_prefix=flower
+    command: celery -A app.config.celery.celery_worker flower --port=5555 --url_prefix=flower --basic_auth=${FLOWER_USER}:${FLOWER_PASS}
     ports:
       - "5555:5555"
     depends_on:

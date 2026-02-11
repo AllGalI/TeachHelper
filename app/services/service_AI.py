@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.config.config_app import settings
+from app.config.celery import celery_app
 from app.exceptions.responses import ErrorNotExists, ErrorPermissionDenied, ErrorRolePermissionDenied, Success
 from app.models.model_comments import CommentTypes
 from app.models.model_files import AnswerFiles, StatusAnswerFile
@@ -119,9 +119,13 @@ class ServiceAI(ServiceBase):
                 answers=data.answers
             )
 
-            # Отправляем на обработку через ServiceComments
-            service_comments = ServiceComments(self.session)
-            return await service_comments.send_to_ai_processing(schema_back, teacher)
+            celery_app.send_task(
+                'tasks.image_processing',
+                kwargs={'data_dict': schema_back.model_dump(mode='json')}
+            )
+            
+            await self.session.commit()
+            return Success()
             
         except HTTPException:
             await self.session.rollback()
