@@ -54,9 +54,10 @@ class ServiceAuth(ServiceBase):
                     password=get_password_hash(user.password),
                     role=user.role,
                 )
+                
                 self.session.add(user_db)
-                if hasattr(user_db, "subscription"):
-                    await self.session.refresh(user_db, ["subscription"])
+                await self.session.flush()
+                await self.session.refresh(user_db)
 
             await self.session.commit()
             return UserRead.model_validate(user_db)

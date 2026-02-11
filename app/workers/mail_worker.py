@@ -10,10 +10,7 @@ load_dotenv()
 from app.utils.templates import render_template
 
 
-
-app = Celery('my_tasks', 
-             broker='redis://redis:6379/0',
-             backend='redis://redis:6379/0')
+app = Celery('my_tasks')
 
 @app.task
 def send_email(to_email: str, subject: str, template_name: str, context: dict):
@@ -35,8 +32,7 @@ def send_email(to_email: str, subject: str, template_name: str, context: dict):
             server.starttls()  # Включаем шифрование
             server.login(os.getenv("SMTP_USERNAME"), os.getenv("SMTP_PASSWORD"))
             server.send_message(message)
-            print({to_email})
-        return f"Email sent to {to_email}"
+
     except Exception as e:
         # Для Celery важно видеть ошибки, чтобы он мог переотправить задачу (retry)
         print(f"Error sending email: {e}")

@@ -39,7 +39,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         # Логируем детали запроса
@@ -85,5 +85,29 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
+from gunicorn.app.base import BaseApplication
+
+class GunicornApplication(BaseApplication):
+    def __init__(self, app, options=None):
+        self.options = options or {}
+        self.application = app
+        super().__init__()
+
+    def load_config(self):
+        config = {key: value for key, value in self.options.items()
+                  if key in self.cfg.settings and value is not None}
+        for key, value in config.items():
+            self.cfg.set(key, value)
+
+    def load(self):
+        return self.application
+
 if __name__ == "__main__":
+    # options = {
+    #     'bind': '0.0.0.0:8000',
+    #     'workers': 2,
+    #     'worker_class': 'uvicorn.workers.UvicornWorker',
+    # }
+    # GunicornApplication(app, options).run()
+
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
