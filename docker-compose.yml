@@ -14,8 +14,8 @@ services:
         condition: service_healthy # Ждем готовности Redis
       minio:
         condition: service_started
-      htr_listener:
-        condition: service_healthy
+      # htr_listener:
+      #   condition: service_healthy
      
     deploy:
       resources:
@@ -25,33 +25,44 @@ services:
     volumes:
       - .:/app-code
 
-  htr_listener:
-    build: .
-    env_file:
-      - .env
-    container_name: htr_listener
-    command: celery -A app.config.celery.celery_worker worker --loglevel=info -c 1 --max-tasks-per-child=10
-    deploy:
-        resources:
-          limits:
-            memory: 512M
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    healthcheck:
-      # Команда inspect ping проверяет, отвечает ли воркер на запросы брокера
-      test: ["CMD-SHELL", "celery -A app.config.celery.celery_worker inspect ping"]
-      interval: 1m
-      timeout: 15s
-      retries: 3
-      start_period: 30s
+  # htr_listener:
+  #   image: allgall/htr-service:latest
+  #   env_file:
+  #     - .env.htr
+  #   container_name: htr_listener
+  #   # command: celery -A app.configs.celery.celery_worker worker --loglevel=info -c 1 --max-tasks-per-child=10
+  #   deploy:
+  #       resources:
+  #         limits:
+  #           memory: 512M
+  #   extra_hosts:
+  #     - "host.docker.internal:host-gateway"
+    # healthcheck:
+    #   # Команда inspect ping проверяет, отвечает ли воркер на запросы брокера
+    #   test: ["CMD-SHELL", "celery -A app.config.celery.celery_worker inspect ping"]
+    #   interval: 1m
+    #   timeout: 15s
+    #   retries: 3
+    #   start_period: 30s
+    # volumes:
+    #   - /home/th-volume/models/cache:/app/models/cache
 
   flower:
     build: .
-    command: celery -A app.config.celery.celery_worker flower --port=5555 --url_prefix=flower --basic_auth=${FLOWER_USER}:${FLOWER_PASS}
+    env_file:
+      - .env
+    command: celery -A app.config.celery.celery_app flower --port=5555 --url_prefix=flower --basic_auth=${FLOWER_USER}:${FLOWER_PASS}
     ports:
       - "5555:5555"
     depends_on:
       - redis
+    healthcheck:
+      # Команда inspect ping проверяет, отвечает ли воркер на запросы брокера
+      test: ["CMD-SHELL", "celery -A app.config.celery.celery_app inspect ping"]
+      interval: 1m
+      timeout: 15s
+      retries: 3
+      start_period: 30s
   db:
     image: postgres:15
     container_name: postgres_db
@@ -104,13 +115,14 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
-      MINIO_API_CORS_ALLOW_ORIGIN: "*" 
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_API_CORS_ALLOW_ORIGIN: "*"
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL}
     command: server /data --console-address ":9001"
     volumes:
       - minio_data:/data
-
 
 volumes:
   pgdata:

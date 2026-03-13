@@ -121,10 +121,12 @@ class ServiceAI(ServiceBase):
 
             celery_app.send_task(
                 'tasks.image_processing',
-                kwargs={'data_dict': schema_back.model_dump(mode='json')}
+                kwargs={'data': schema_back.model_dump(mode='json')},
+                queue='image_queue'
             )
             
-            await self.session.commit()
+
+            # await self.session.commit()
             return Success()
             
         except HTTPException:
@@ -135,3 +137,4 @@ class ServiceAI(ServiceBase):
             logger.exception(exc)
             await self.session.rollback()
             raise HTTPException(status_code=500, detail="Internal Server Error")
+        

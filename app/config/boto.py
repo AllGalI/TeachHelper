@@ -21,8 +21,8 @@ minio_host = os.getenv("MINIO_HOST", "localhost")
 minio_port = os.getenv("MINIO_PORT", "9000")
 mc = Minio(
     f"{minio_host}:{minio_port}",
-    access_key=os.getenv("MINIO_USER"), 
-    secret_key=os.getenv("MINIO_PASSWORD"),
+    access_key=os.getenv("MINIO_ROOT_USER"), 
+    secret_key=os.getenv("MINIO_ROOT_PASSWORD"),
     secure=False 
 )
 
@@ -39,8 +39,8 @@ async def get_boto_client():
     async with session.client(
         's3',
         endpoint_url=url,
-        aws_access_key_id=os.getenv("MINIO_USER"),
-        aws_secret_access_key=os.getenv("MINIO_PASSWORD"),
+        aws_access_key_id=os.getenv("MINIO_ROOT_USER"),
+        aws_secret_access_key=os.getenv("MINIO_ROOT_PASSWORD"),
         region_name='us-east-1'
     ) as client:
         yield client
@@ -110,7 +110,6 @@ async def delete_files_from_s3(file_keys: list[str]):
             raise e
 
 def make_link_local(link: str):
-    protocol = link.split('://')[0]
-    path = link.split('://')[1].split(":9000")[1]
-    return protocol + "://" + settings.HOST + ":9000" + path
+    path = link.split(":9000")[1]
+    return os.getenv("MINIO_SERVER_URL") + path
     

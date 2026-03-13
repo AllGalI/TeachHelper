@@ -1,13 +1,5 @@
-import os
-import pika
 import uuid
-from dotenv import load_dotenv
-
-import aio_pika
-from app.config.config_app import settings
 from app.schemas.schema_base import BaseModelConfig
-
-load_dotenv()
 
 
 
@@ -42,22 +34,22 @@ class WorkRequestDTO(BaseModelConfig):
 #     return connection.channel()
 
 
-connection: aio_pika.RobustConnection | None = None
-channel: aio_pika.abc.AbstractChannel | None = None
+# connection: aio_pika.RobustConnection | None = None
+# channel: aio_pika.abc.AbstractChannel | None = None
 
 
-async def init_rabbit():
-    global connection, channel
-    connection = await aio_pika.connect_robust(settings.pika_url)
-    channel = await connection.channel()
+# async def init_rabbit():
+#     global connection, channel
+#     connection = await aio_pika.connect_robust(settings.pika_url)
+#     channel = await connection.channel()
 
 
-async def close_rabbit():
-    if connection:
-        await connection.close()
+# async def close_rabbit():
+#     if connection:
+#         await connection.close()
 
 
-def get_rabbit_channel():
-    if channel is None:
-        raise RuntimeError("RabbitMQ channel is not initialized")
-    return channel
+# def get_rabbit_channel():
+#     if channel is None:
+#         raise RuntimeError("RabbitMQ channel is not initialized")
+#     return channel

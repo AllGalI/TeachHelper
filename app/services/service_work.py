@@ -19,7 +19,7 @@ from app.schemas.schema_comment import CommentRead, Coordinates as CoordinatesSc
 from app.schemas.schema_files import IFile, IFileAnswer, IFileAnserUpdate, compare_lists
 from app.schemas.schema_work import AnswerUpdate, CriterionRead, ExerciseRead, TaskRead
 from app.config.boto import delete_files_from_s3, get_presigned_url
-from app.config.rabbit import WorkRequestDTO, channel
+from app.config.rabbit import WorkRequestDTO
 from app.schemas.schema_work import AnswerRead, AssessmentRead, SmartFiltersWorkStudent, SmartFiltersWorkTeacher, WorkEasyRead, WorkRead, WorkUpdate, WorksFilterResponseStudent, WorksFilterResponseTeacher
 from app.utils.logger import logger
 from app.transformers.transformer_work import TransformerWorks

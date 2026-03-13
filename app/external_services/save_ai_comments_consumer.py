@@ -14,6 +14,7 @@ from app.utils.logger import logger
 
 @celery_app.task(
     name='tasks.save_ai_comments',
+    queue='save_ai_results_queue',
     bind=True,                # Дает доступ к self (объекту задачи)
     autoretry_for=(Exception,), # За чем следим (можно указать конкретно SQLAlchemyError)
     retry_backoff=True,       # Экспоненциальная задержка (1с, 2с, 4с, 8с...)

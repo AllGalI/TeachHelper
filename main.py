@@ -43,16 +43,16 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         # Логируем детали запроса
-        print(f"--- New Request ---")
-        print(f"Method: {request.method} Path: {request.url.path}")
-        print(f"Headers: {dict(request.headers)}") # Тут увидите X-Forwarded-Prefix
-        print(f"Root Path: {request.scope.get('root_path')}")
+        # print(f"--- New Request ---")
+        # print(f"Method: {request.method} Path: {request.url.path}")
+        # print(f"Headers: {dict(request.headers)}") # Тут увидите X-Forwarded-Prefix
+        # print(f"Root Path: {request.scope.get('root_path')}")
         
         start_time = time.time()
         response = await call_next(request)
         process_time = time.time() - start_time
         
-        print(f"Response status: {response.status_code} Time: {process_time:.4f}s")
+        # print(f"Response status: {response.status_code} Time: {process_time:.4f}s")
         return response
 
 
@@ -110,4 +110,4 @@ if __name__ == "__main__":
     # }
     # GunicornApplication(app, options).run()
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, log_level='info')

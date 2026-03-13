@@ -9,7 +9,7 @@ from jose import ExpiredSignatureError, jwt, JWTError
 
 from app.config.config_app import settings
 from app.exceptions.responses import Success
-from app.models.model_users import Users
+from app.models.model_users import RoleUser, Users
 from app.models.model_subscription import Subscriptions, Plans
 from app.repositories.repo_user import RepoUser
 from app.repositories.repo_subscription import RepoSubscription
@@ -27,7 +27,6 @@ from app.config.redis import red_client
 from app.config.celery import celery_app
 from datetime import datetime, timedelta, timezone
 
-from app.workers.mail_worker import send_email
 
 class ServiceAuth(ServiceBase):
     def __init__(self, session: AsyncSession):
@@ -61,7 +60,16 @@ class ServiceAuth(ServiceBase):
                 await self.session.refresh(user_db)
 
             await self.session.commit()
-            return UserRead.model_validate(user_db)
+            response = UserRead(
+                id=user_db.id,
+                first_name=user_db.first_name,
+                last_name=user_db.last_name,
+                email=user_db.email,
+                role=user_db.role,
+                is_verificated=user_db.is_verificated,
+                subscription=None
+            )
+            return response
 
         except HTTPException as exc:
             await self.session.rollback()
@@ -150,7 +158,8 @@ class ServiceAuth(ServiceBase):
                     "subject": "Подтверждение почты",
                     "template_name": "template_verification_code.html",
                     "context": {"name": user.first_name, "code": code}
-                }
+                },
+                queue='email_queue'
             )
             return Success()
 
@@ -272,7 +281,8 @@ class ServiceAuth(ServiceBase):
                     "subject": "Сброс пароля",
                     "template_name": "template_reset_password.html",
                     "context": {"name": user.first_name, "code": code}
-                }
+                },
+                queue='email_queue'
             )
 
             return {"message": "Письмо отправлено"}

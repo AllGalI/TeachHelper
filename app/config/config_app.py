@@ -24,15 +24,6 @@ class Settings(BaseSettings):
     # MinIO
     BUCKET: str = "permanent"
 
-    # pika
-    PIKA_HOST: str
-    PIKA_PORT: int
-    PIKA_USER: str
-    PIKA_PASSWORD: str
-    PIKA_INCOMING_QUEUE: str
-    PIKA_OUTGOING_QUEUE: str
-
-
     UKASSA_URL: str
     UKASSA_SHOP_ID: str
     UKASSA_SECRET_KEY: str
